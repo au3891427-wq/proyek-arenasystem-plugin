@@ -108,6 +108,8 @@ final class UpdateService {
         }
 
         boolean shutdownHookRegistered = false;
+        Path staged = modsDirectory.resolve(MOD_JAR + ".pending");
+        boolean modStaged = false;
         try {
             URI downloadUri = validateReleaseAssetUrl(
                     requiredString(manifest, "downloadUrl"),
@@ -118,8 +120,8 @@ final class UpdateService {
                 throw new IOException("Manifest SHA-256 is malformed.");
             }
 
-            Path staged = modsDirectory.resolve(MOD_JAR + ".pending");
             downloadVerified(downloadUri, staged, expectedHash, MAX_MOD_BYTES);
+            modStaged = true;
             downloadHelper(
                     loader.getGameDir(), remoteVersion, requiredString(manifest, "helperSha256"));
 
@@ -131,6 +133,14 @@ final class UpdateService {
                     + " downloaded and verified; installation is queued for game shutdown.");
         } finally {
             if (!shutdownHookRegistered) {
+                if (modStaged) {
+                    try {
+                        Files.deleteIfExists(staged);
+                    } catch (IOException cleanupFailure) {
+                        System.err.println("[ArenaSystem] Could not remove uncommitted staged JAR: "
+                                + cleanupFailure.getMessage());
+                    }
+                }
                 releaseUpdateLock();
             }
         }
@@ -322,7 +332,16 @@ final class UpdateService {
         Path staged = helper.resolveSibling(helper.getFileName() + ".download");
         Files.createDirectories(helper.getParent());
         downloadVerified(helperUri, staged, helperHash, MAX_HELPER_BYTES);
-        Files.move(staged, helper, StandardCopyOption.REPLACE_EXISTING);
+        try {
+            Files.move(staged, helper, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException moveFailure) {
+            try {
+                Files.deleteIfExists(staged);
+            } catch (IOException cleanupFailure) {
+                moveFailure.addSuppressed(cleanupFailure);
+            }
+            throw moveFailure;
+        }
     }
 
     private static void downloadVerified(
