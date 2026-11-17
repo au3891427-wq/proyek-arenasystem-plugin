@@ -1,0 +1,35 @@
+name: Build Assassin Dagger Updater
+
+on:
+  push:
+    paths:
+      - "AssassinDaggerUpdater/**"
+      - ".github/workflows/build-assassin-updater.yml"
+  pull_request:
+    paths:
+      - "AssassinDaggerUpdater/**"
+      - ".github/workflows/build-assassin-updater.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build helper
+        working-directory: AssassinDaggerUpdater
+        run: gradle --no-daemon clean build
+      - name: Upload helper artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: assassin-dagger-windows-updater
+          path: AssassinDaggerUpdater/build/libs/assassin-dagger-updater-0.1.0.jar
+          if-no-files-found: error
