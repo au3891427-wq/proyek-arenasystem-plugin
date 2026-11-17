@@ -18,6 +18,7 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -86,7 +87,7 @@ final class UpdateService {
         if (compareVersions(remoteParts, localParts) <= 0) return;
 
         Path target = localMod.get().getOrigin().getPaths().stream()
-                .filter(Files::isRegularFile)
+                .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
                 .filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".jar"))
                 .findFirst()
                 .orElseThrow(() -> new IOException("Could not locate installed mod JAR."))
@@ -95,8 +96,10 @@ final class UpdateService {
             throw new IOException("Unexpected installed mod filename: " + target.getFileName());
         }
         Path modsDirectory = target.getParent();
-        if (modsDirectory == null || !"mods".equalsIgnoreCase(modsDirectory.getFileName().toString())) {
-            throw new IOException("Mod must be installed directly inside a mods directory.");
+        if (modsDirectory == null
+                || !"mods".equalsIgnoreCase(modsDirectory.getFileName().toString())
+                || Files.isSymbolicLink(modsDirectory)) {
+            throw new IOException("Mod must be installed directly inside a real mods directory.");
         }
 
         if (!acquireUpdateLock(modsDirectory)) {
@@ -142,7 +145,7 @@ final class UpdateService {
         }
 
         FileChannel channel = FileChannel.open(
-                lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
         try {
             FileLock lock;
             try {
