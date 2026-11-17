@@ -29,6 +29,55 @@ jobs:
       - name: Build helper
         working-directory: AssassinDaggerUpdater
         run: gradle --no-daemon clean build
+      - name: Smoke-test Windows installation and checksum rejection
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $helper = (Resolve-Path "AssassinDaggerUpdater/build/libs/assassin-dagger-updater-0.1.0.jar").Path
+          $testRoot = Join-Path $env:RUNNER_TEMP ("arenasystem-updater-test-" + [guid]::NewGuid().ToString("N"))
+          $mods = Join-Path $testRoot "mods"
+          $target = Join-Path $mods "arenasystem-assassin-dagger-client.jar"
+          $staged = "$target.pending"
+          $backup = "$target.backup"
+
+          New-Item -ItemType Directory -Force -Path $mods | Out-Null
+          try {
+            [System.IO.File]::WriteAllText($target, "existing-client-jar")
+            [System.IO.File]::WriteAllText($staged, "verified-client-update")
+            $expectedHash = (Get-FileHash $staged -Algorithm SHA256).Hash.ToLowerInvariant()
+
+            & java -jar $helper 2147483647 $target $staged $expectedHash
+            if ($LASTEXITCODE -ne 0) {
+              throw "Updater failed to install a valid staged JAR."
+            }
+            if ([System.IO.File]::ReadAllText($target) -ne "verified-client-update") {
+              throw "Updater did not install the expected JAR contents."
+            }
+            if ([System.IO.File]::ReadAllText($backup) -ne "existing-client-jar") {
+              throw "Updater did not preserve the previous JAR as a backup."
+            }
+            if (Test-Path $staged) {
+              throw "Updater did not consume the staged JAR after installation."
+            }
+
+            [System.IO.File]::WriteAllText($staged, "tampered-client-update")
+            & java -jar $helper 2147483647 $target $staged ("0" * 64)
+            if ($LASTEXITCODE -eq 0) {
+              throw "Updater accepted a staged JAR with an invalid SHA-256."
+            }
+            if ([System.IO.File]::ReadAllText($target) -ne "verified-client-update") {
+              throw "Checksum rejection modified the active JAR."
+            }
+            if ([System.IO.File]::ReadAllText($staged) -ne "tampered-client-update") {
+              throw "Checksum rejection unexpectedly consumed the staged file."
+            }
+          }
+          finally {
+            if (Test-Path $testRoot) {
+              Remove-Item -LiteralPath $testRoot -Recurse -Force
+            }
+          }
+
       - name: Upload helper artifact
         uses: actions/upload-artifact@v4
         with:
