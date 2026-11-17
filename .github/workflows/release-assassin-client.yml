@@ -44,9 +44,7 @@ jobs:
             throw "Tag must look like assassin-client-v0.1.0"
           }
 
-          $client = Get-ChildItem "AssassinDaggerClient/build/libs/arenasystem-assassin-dagger-client-*.jar" |
-            Where-Object { $_.Name -notlike '*-sources.jar' } |
-            Select-Object -First 1
+          $client = Get-Item "AssassinDaggerClient/build/libs/arenasystem-assassin-dagger-client.jar"
           $helper = Get-Item "AssassinDaggerUpdater/build/libs/assassin-dagger-updater-0.1.0.jar"
           if (-not $client -or -not $helper) { throw "Build outputs are missing." }
 
