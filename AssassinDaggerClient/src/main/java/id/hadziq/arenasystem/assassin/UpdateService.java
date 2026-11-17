@@ -39,7 +39,7 @@ final class UpdateService {
         validateManifest(manifest);
         String remoteVersion = requiredString(manifest, "version");
         String localVersion = localMod.get().getMetadata().getVersion().getFriendlyString();
-        String gameVersion = loader.getModContainer("minecraft").map(c -> c.getMetadata().getVersion().getFriendlyString()).orElse("unknown");
+        String gameVersion = loader.getRawGameVersion();
         if (!requiredString(manifest, "minecraft").equals(gameVersion)) {
             System.out.println("[ArenaSystem] Update skipped: incompatible Minecraft version " + gameVersion);
             return;
