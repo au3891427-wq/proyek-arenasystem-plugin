@@ -65,6 +65,8 @@ jobs:
             if ($LASTEXITCODE -eq 0) {
               throw "Updater accepted a staged JAR with an invalid SHA-256."
             }
+            # The non-zero exit code is expected for this negative test.
+            $global:LASTEXITCODE = 0
             if ([System.IO.File]::ReadAllText($target) -ne "verified-client-update") {
               throw "Checksum rejection modified the active JAR."
             }
