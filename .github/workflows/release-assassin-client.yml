@@ -24,7 +24,11 @@ jobs:
 
       - name: Build client mod
         working-directory: AssassinDaggerClient
-        run: gradle --no-daemon clean build
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $version = $env:RELEASE_TAG -replace '^assassin-client-v', ''
+          gradle --no-daemon clean build "-Pmod_version=$version"
 
       - name: Build Windows updater helper
         working-directory: AssassinDaggerUpdater
