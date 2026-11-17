@@ -26,7 +26,6 @@ public final class UpdaterMain {
     private static final String WAIT_TIMEOUT_PROPERTY = "arenasystem.updater.waitTimeoutMillis";
     private static final String EXPECTED_JAR = "arenasystem-assassin-dagger-client.jar";
     private static final String UPDATE_LOCK_FILE = ".arenasystem-assassin-dagger-update.lock";
-    private static final String WAIT_TIMEOUT_PROPERTY = "arenasystem.updater.waitTimeoutMillis";
 
     private UpdaterMain() {
     }
