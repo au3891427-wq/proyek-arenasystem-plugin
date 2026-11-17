@@ -84,7 +84,7 @@ final class UpdateService {
         }
 
         Path staged = modsDirectory.resolve(MOD_JAR + ".pending");
-        downloadVerified(downloadUri, staged, expectedHash, MAX_MOD_BYTES, MOD_JAR);
+        downloadVerified(downloadUri, staged, expectedHash, MAX_MOD_BYTES);
         downloadHelper(loader.getGameDir(), requiredString(manifest, "helperSha256"));
 
         Runtime.getRuntime().addShutdownHook(new Thread(
@@ -210,12 +210,12 @@ final class UpdateService {
         Path helper = gameDirectory.resolve(".arenasystem/updater").resolve(HELPER_JAR);
         Path staged = helper.resolveSibling(helper.getFileName() + ".download");
         Files.createDirectories(helper.getParent());
-        downloadVerified(HELPER_URI, staged, helperHash, MAX_HELPER_BYTES, HELPER_JAR);
+        downloadVerified(HELPER_URI, staged, helperHash, MAX_HELPER_BYTES);
         Files.move(staged, helper, StandardCopyOption.REPLACE_EXISTING);
     }
 
     private static void downloadVerified(
-            URI uri, Path destination, String expectedHash, long maxBytes, String expectedAsset)
+            URI uri, Path destination, String expectedHash, long maxBytes)
             throws IOException, InterruptedException {
         validateGitHubRedirect(uri);
 
