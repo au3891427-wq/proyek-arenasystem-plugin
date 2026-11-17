@@ -1,0 +1,76 @@
+name: Release Assassin Dagger Client
+
+on:
+  push:
+    tags:
+      - "assassin-client-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.7.1"
+
+      - name: Build client mod
+        working-directory: AssassinDaggerClient
+        run: gradle --no-daemon clean build
+
+      - name: Build Windows updater helper
+        working-directory: AssassinDaggerUpdater
+        run: gradle --no-daemon clean build
+
+      - name: Prepare release assets and manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^assassin-client-v', ''
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Tag must look like assassin-client-v0.1.0"
+          }
+
+          $client = Get-ChildItem "AssassinDaggerClient/build/libs/arenasystem-assassin-dagger-client-*.jar" |
+            Where-Object { $_.Name -notlike '*-sources.jar' } |
+            Select-Object -First 1
+          $helper = Get-Item "AssassinDaggerUpdater/build/libs/assassin-dagger-updater-0.1.0.jar"
+          if (-not $client -or -not $helper) { throw "Build outputs are missing." }
+
+          $clientHash = (Get-FileHash $client.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $helperHash = (Get-FileHash $helper.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $manifest = @{
+            schemaVersion = 1
+            modId = "arenasystem_assassin_dagger"
+            version = $version
+            minecraft = "26.3"
+            loader = "fabric"
+            channel = "stable"
+            downloadUrl = "https://github.com/${{ github.repository }}/releases/download/$tag/$($client.Name)"
+            sha256 = $clientHash
+            helperSha256 = $helperHash
+          } | ConvertTo-Json -Depth 4
+          $manifest | Set-Content -Path "update-manifest.json" -Encoding utf8
+
+          New-Item -ItemType Directory -Force -Path "release-assets" | Out-Null
+          Copy-Item $client.FullName "release-assets/"
+          Copy-Item $helper.FullName "release-assets/assassin-dagger-updater-0.1.0.jar"
+          Copy-Item "update-manifest.json" "release-assets/"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Assassin Dagger Client ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            release-assets/*
