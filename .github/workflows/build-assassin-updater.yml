@@ -47,10 +47,10 @@ jobs:
               [long]$WaitTimeoutMillis = 0
             )
             if ($WaitTimeoutMillis -gt 0) {
-              & java "-Darenasystem.updater.waitTimeoutMillis=$WaitTimeoutMillis" -jar $helper @Arguments
+              & java "-Darenasystem.updater.waitTimeoutMillis=$WaitTimeoutMillis" -jar $helper @Arguments | Out-Host
             }
             else {
-              & java -jar $helper @Arguments
+              & java -jar $helper @Arguments | Out-Host
             }
             $exitCode = $LASTEXITCODE
             $global:LASTEXITCODE = 0
