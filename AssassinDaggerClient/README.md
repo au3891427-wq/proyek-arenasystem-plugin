@@ -17,7 +17,7 @@ input handling, and Paper plugin networking are not implemented in this module y
 
 ## Build
 
-Requires JDK 25 and Gradle 9.7.1.
+Requires JDK 25 and Gradle 9.8.0.
 
 ```powershell
 gradle --no-daemon clean build
@@ -42,16 +42,25 @@ The manifest must include:
 - `downloadUrl`
 - `sha256`
 - `helperSha256`
+- `loaderVersion` (minimum Fabric Loader version required by the release)
+
+Manual release-workflow dispatch is dry-run only. It builds the client and helper, derives Minecraft
+and Loader versions from `gradle.properties`, validates the manifest, and uploads the three assets
+as a workflow artifact. Production releases are published only by pushing an
+`assassin-client-vX.Y.Z` tag.
 
 ## Windows install flow
 
 1. Client checks the latest stable release in the background.
 2. It verifies mod ID, loader, exact Minecraft version, HTTPS GitHub URL, and SHA-256.
 3. It downloads the mod JAR to `mods/arenasystem-assassin-dagger-client.jar.pending`.
-4. It downloads and verifies the standalone helper into `.arenasystem/updater/`.
-5. During JVM shutdown, it starts the helper with the current Minecraft PID.
-6. The helper waits for Minecraft to exit, backs up the current JAR, installs the staged JAR,
-   verifies the installed hash, and restores the backup if verification fails.
+4. It downloads and verifies the matching helper from the same release tag into `.arenasystem/updater/`.
+5. A file lock in `mods/` prevents separate Minecraft instances from staging overlapping updates.
+6. During JVM shutdown, it starts the helper with the current Minecraft PID, using `javaw.exe`
+   or the `java.exe` fallback from the active Java runtime.
+7. The helper waits for Minecraft to exit and for the update lock to become available, backs up
+   the current JAR, installs the staged JAR, verifies the installed hash, and restores the backup
+   if installation fails.
 
 The updater does not install Paper plugin JARs and does not execute content from the manifest.
 
