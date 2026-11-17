@@ -2,6 +2,7 @@ package id.hadziq.arenasystem.updater;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
@@ -11,9 +12,9 @@ import java.util.HexFormat;
 /**
  * Minimal Windows-safe replacement helper.
  *
- * The client mod is responsible for downloading the staged JAR and launching
- * this helper during JVM shutdown. This process waits for the Minecraft PID,
- * verifies the staged file, then replaces only the expected mod JAR.
+ * The client mod launches this helper during JVM shutdown. This process waits
+ * for the Minecraft PID, verifies the staged file, then replaces only the
+ * expected mod JAR.
  */
 public final class UpdaterMain {
     private static final long WAIT_TIMEOUT_MILLIS = 180_000L;
@@ -45,7 +46,7 @@ public final class UpdaterMain {
 
         Path target = Path.of(args[1]).toAbsolutePath().normalize();
         Path staged = Path.of(args[2]).toAbsolutePath().normalize();
-        String expectedHash = args[3].toLowerCase();
+        String expectedHash = args[3].toLowerCase(java.util.Locale.ROOT);
 
         if (!expectedHash.matches("[a-f0-9]{64}")) {
             throw new IllegalArgumentException("Invalid SHA-256 value.");
@@ -54,8 +55,8 @@ public final class UpdaterMain {
         validatePaths(target, staged);
         waitForProcessExit(minecraftPid);
 
-        if (!Files.isRegularFile(staged)) {
-            throw new IOException("Staged update does not exist.");
+        if (!Files.isRegularFile(staged, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("Staged update does not exist or is not a regular file.");
         }
         if (!sha256(staged).equals(expectedHash)) {
             throw new IOException("Staged update SHA-256 mismatch.");
@@ -65,8 +66,10 @@ public final class UpdaterMain {
         Path failed = target.resolveSibling(target.getFileName() + ".failed");
 
         Files.deleteIfExists(failed);
-        if (Files.exists(target)) {
+        boolean originalBackedUp = false;
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
             Files.move(target, backup, StandardCopyOption.REPLACE_EXISTING);
+            originalBackedUp = true;
         }
 
         try {
@@ -76,14 +79,36 @@ public final class UpdaterMain {
             }
             System.out.println("[ArenaSystem Updater] Update installed successfully.");
         } catch (Exception installFailure) {
-            Files.deleteIfExists(failed);
-            if (Files.exists(target)) {
-                Files.move(target, failed, StandardCopyOption.REPLACE_EXISTING);
-            }
-            if (Files.exists(backup)) {
-                Files.move(backup, target, StandardCopyOption.REPLACE_EXISTING);
-            }
+            rollback(target, backup, failed, originalBackedUp, installFailure);
             throw installFailure;
+        }
+    }
+
+    private static void rollback(
+            Path target,
+            Path backup,
+            Path failed,
+            boolean originalBackedUp,
+            Exception installFailure) {
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+            try {
+                Files.move(target, failed, StandardCopyOption.REPLACE_EXISTING);
+            } catch (Exception quarantineFailure) {
+                installFailure.addSuppressed(quarantineFailure);
+            }
+        }
+
+        if (originalBackedUp && Files.exists(backup, LinkOption.NOFOLLOW_LINKS)) {
+            try {
+                Files.copy(backup, target, StandardCopyOption.REPLACE_EXISTING);
+                if (!sha256(target).equals(sha256(backup))) {
+                    throw new IOException("Restored backup failed SHA-256 verification.");
+                }
+                System.err.println("[ArenaSystem Updater] Original JAR restored from backup.");
+            } catch (Exception restoreFailure) {
+                installFailure.addSuppressed(restoreFailure);
+                System.err.println("[ArenaSystem Updater] Rollback failed; backup retained at: " + backup);
+            }
         }
     }
 
@@ -101,13 +126,18 @@ public final class UpdaterMain {
         if (!staged.getFileName().toString().equalsIgnoreCase(EXPECTED_JAR + ".pending")) {
             throw new IllegalArgumentException("Unexpected staged filename.");
         }
+        if (Files.isSymbolicLink(targetParent)
+                || Files.isSymbolicLink(target)
+                || Files.isSymbolicLink(staged)) {
+            throw new IllegalArgumentException("Symbolic-link paths are not allowed.");
+        }
+        if (!Files.isDirectory(targetParent, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalArgumentException("Mods directory does not exist or is not a real directory.");
+        }
 
         Path modsDirectory = targetParent.toRealPath();
         if (!modsDirectory.getFileName().toString().equalsIgnoreCase("mods")) {
             throw new IllegalArgumentException("Target must be inside a Minecraft mods directory.");
-        }
-        if (Files.isSymbolicLink(target) || Files.isSymbolicLink(staged)) {
-            throw new IllegalArgumentException("Symbolic-link targets are not allowed.");
         }
     }
 
