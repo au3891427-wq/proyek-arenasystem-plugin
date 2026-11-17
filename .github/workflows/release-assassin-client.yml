@@ -5,6 +5,17 @@ on:
     tags:
       - "assassin-client-v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Semantic version to build for a dry run (for example 0.1.0)"
+        required: true
+        default: "0.1.0"
+        type: string
+      dry_run:
+        description: "Build and validate assets without publishing a GitHub Release"
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -14,10 +25,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "25"
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.8.0"
@@ -25,50 +38,137 @@ jobs:
       - name: Build client mod
         working-directory: AssassinDaggerClient
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+        shell: pwsh
         run: |
-          $version = $env:RELEASE_TAG -replace '^assassin-client-v', ''
+          $ErrorActionPreference = "Stop"
+          if ($env:EVENT_NAME -eq "workflow_dispatch") {
+            $version = $env:DISPATCH_VERSION
+          }
+          else {
+            if ($env:REF_TYPE -ne "tag" -or $env:REF_NAME -notmatch '^assassin-client-v\d+\.\d+\.\d+$') {
+              throw "Release builds must be triggered by an assassin-client-vX.Y.Z tag."
+            }
+            $version = $env:REF_NAME -replace '^assassin-client-v', ''
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Version must be stable semantic version X.Y.Z."
+          }
           gradle --no-daemon clean build "-Pmod_version=$version"
 
       - name: Build Windows updater helper
         working-directory: AssassinDaggerUpdater
         run: gradle --no-daemon clean build
 
-      - name: Prepare release assets and manifest
+      - name: Prepare and validate release assets
         shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           $ErrorActionPreference = "Stop"
-          $tag = "${{ github.ref_name }}"
-          $version = $tag -replace '^assassin-client-v', ''
-          if ($version -notmatch '^\d+\.\d+\.\d+$') {
-            throw "Tag must look like assassin-client-v0.1.0"
+
+          $isDryRun = $env:EVENT_NAME -eq "workflow_dispatch"
+          if ($isDryRun -and $env:DRY_RUN -ne "true") {
+            throw "Manual workflow dispatch is dry-run only. Publish production releases by pushing a version tag."
           }
 
-          $client = Get-Item "AssassinDaggerClient/build/libs/arenasystem-assassin-dagger-client.jar"
-          $helper = Get-Item "AssassinDaggerUpdater/build/libs/assassin-dagger-updater-0.1.0.jar"
-          if (-not $client -or -not $helper) { throw "Build outputs are missing." }
+          if ($isDryRun) {
+            $version = $env:DISPATCH_VERSION
+            $tag = "assassin-client-v$version"
+          }
+          else {
+            if ($env:REF_TYPE -ne "tag" -or $env:REF_NAME -notmatch '^assassin-client-v\d+\.\d+\.\d+$') {
+              throw "Unexpected release ref; expected assassin-client-vX.Y.Z."
+            }
+            $tag = $env:REF_NAME
+            $version = $tag -replace '^assassin-client-v', ''
+          }
 
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Tag/input version must look like assassin-client-v0.1.0."
+          }
+
+          $propertiesPath = "AssassinDaggerClient/gradle.properties"
+          $properties = @{}
+          foreach ($line in Get-Content $propertiesPath) {
+            if ($line -match '^([^#=]+)=(.*)$') {
+              $properties[$matches[1].Trim()] = $matches[2].Trim()
+            }
+          }
+          foreach ($requiredProperty in @("minecraft_version", "loader_version")) {
+            if (-not $properties.ContainsKey($requiredProperty)) {
+              throw "Missing $requiredProperty in $propertiesPath."
+            }
+          }
+
+          $minecraftVersion = $properties["minecraft_version"]
+          $loaderVersion = $properties["loader_version"]
+          $clientPath = "AssassinDaggerClient/build/libs/arenasystem-assassin-dagger-client.jar"
+          $helperPath = "AssassinDaggerUpdater/build/libs/assassin-dagger-updater-0.1.0.jar"
+          if (-not (Test-Path $clientPath -PathType Leaf)) { throw "Client JAR is missing: $clientPath" }
+          if (-not (Test-Path $helperPath -PathType Leaf)) { throw "Updater JAR is missing: $helperPath" }
+
+          $client = Get-Item $clientPath
+          $helper = Get-Item $helperPath
           $clientHash = (Get-FileHash $client.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           $helperHash = (Get-FileHash $helper.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+
           $manifest = @{
             schemaVersion = 1
             modId = "arenasystem_assassin_dagger"
             version = $version
-            minecraft = "26.3"
+            minecraft = $minecraftVersion
             loader = "fabric"
+            loaderVersion = $loaderVersion
             channel = "stable"
-            downloadUrl = "https://github.com/${{ github.repository }}/releases/download/$tag/$($client.Name)"
+            downloadUrl = "https://github.com/$($env:REPOSITORY)/releases/download/$tag/$($client.Name)"
             sha256 = $clientHash
             helperSha256 = $helperHash
           } | ConvertTo-Json -Depth 4
-          $manifest | Set-Content -Path "update-manifest.json" -Encoding utf8
+
+          $manifestPath = "update-manifest.json"
+          $manifest | Set-Content -Path $manifestPath -Encoding utf8
+          $parsed = Get-Content -Raw $manifestPath | ConvertFrom-Json
+          if ($parsed.schemaVersion -ne 1 -or
+              $parsed.modId -ne "arenasystem_assassin_dagger" -or
+              $parsed.version -ne $version -or
+              $parsed.minecraft -ne $minecraftVersion -or
+              $parsed.loader -ne "fabric" -or
+              $parsed.loaderVersion -ne $loaderVersion -or
+              $parsed.channel -ne "stable" -or
+              $parsed.downloadUrl -ne "https://github.com/$($env:REPOSITORY)/releases/download/$tag/$($client.Name)" -or
+              $parsed.sha256 -ne $clientHash -or
+              $parsed.helperSha256 -ne $helperHash) {
+            throw "Generated update manifest failed validation."
+          }
 
           New-Item -ItemType Directory -Force -Path "release-assets" | Out-Null
           Copy-Item $client.FullName "release-assets/"
           Copy-Item $helper.FullName "release-assets/assassin-dagger-updater-0.1.0.jar"
-          Copy-Item "update-manifest.json" "release-assets/"
+          Copy-Item $manifestPath "release-assets/"
+
+          $assetCount = (Get-ChildItem "release-assets" -File).Count
+          if ($assetCount -ne 3) { throw "Expected 3 release assets, found $assetCount." }
+          Write-Host "Prepared 3 assets for $tag (Minecraft $minecraftVersion, Fabric Loader $loaderVersion)."
+
+      - name: Upload dry-run release assets
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: assassin-client-release-dry-run
+          path: release-assets/*
+          if-no-files-found: error
 
       - name: Publish GitHub Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/assassin-client-v')
         uses: softprops/action-gh-release@v2
         with:
           name: Assassin Dagger Client ${{ github.ref_name }}
