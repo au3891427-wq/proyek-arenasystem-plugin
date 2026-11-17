@@ -191,13 +191,6 @@ final class UpdateService {
         return uri;
     }
 
-    private static String extractReleaseTag(URI uri) {
-        String path = uri.getPath();
-        int start = RELEASE_PATH_PREFIX.length();
-        int end = path.length() - MOD_JAR.length() - 1;
-        return path.substring(start, end);
-    }
-
     private static void validateGitHubRedirect(URI uri) throws IOException {
         String host = uri.getHost();
         boolean allowedHost = host != null && (
@@ -224,11 +217,7 @@ final class UpdateService {
     private static void downloadVerified(
             URI uri, Path destination, String expectedHash, long maxBytes, String expectedAsset)
             throws IOException, InterruptedException {
-        if (uri.equals(HELPER_URI)) {
-            validateGitHubRedirect(uri);
-        } else {
-            validateReleaseAssetUrl(uri.toString(), expectedAsset, extractReleaseTag(uri));
-        }
+        validateGitHubRedirect(uri);
 
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .timeout(Duration.ofMinutes(3))
