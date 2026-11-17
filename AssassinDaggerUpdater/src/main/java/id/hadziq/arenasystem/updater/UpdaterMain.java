@@ -1,10 +1,14 @@
 package id.hadziq.arenasystem.updater;
 
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -21,6 +25,8 @@ public final class UpdaterMain {
     private static final long POLL_INTERVAL_MILLIS = 500L;
     private static final String WAIT_TIMEOUT_PROPERTY = "arenasystem.updater.waitTimeoutMillis";
     private static final String EXPECTED_JAR = "arenasystem-assassin-dagger-client.jar";
+    private static final String UPDATE_LOCK_FILE = ".arenasystem-assassin-dagger-update.lock";
+    private static final String WAIT_TIMEOUT_PROPERTY = "arenasystem.updater.waitTimeoutMillis";
 
     private UpdaterMain() {
     }
@@ -56,32 +62,37 @@ public final class UpdaterMain {
         validatePaths(target, staged);
         waitForProcessExit(minecraftPid);
 
-        if (!Files.isRegularFile(staged, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("Staged update does not exist or is not a regular file.");
-        }
-        if (!sha256(staged).equals(expectedHash)) {
-            throw new IOException("Staged update SHA-256 mismatch.");
-        }
-
-        Path backup = target.resolveSibling(target.getFileName() + ".backup");
-        Path failed = target.resolveSibling(target.getFileName() + ".failed");
-
-        Files.deleteIfExists(failed);
-        boolean originalBackedUp = false;
-        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-            Files.move(target, backup, StandardCopyOption.REPLACE_EXISTING);
-            originalBackedUp = true;
-        }
-
-        try {
-            Files.move(staged, target, StandardCopyOption.REPLACE_EXISTING);
-            if (!sha256(target).equals(expectedHash)) {
-                throw new IOException("Installed JAR failed post-install verification.");
+        Path lockPath = target.getParent().resolve(UPDATE_LOCK_FILE);
+        try (FileChannel lockChannel = FileChannel.open(
+                lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             FileLock ignored = waitForUpdateLock(lockChannel)) {
+            if (!Files.isRegularFile(staged, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("Staged update does not exist or is not a regular file.");
             }
-            System.out.println("[ArenaSystem Updater] Update installed successfully.");
-        } catch (Exception installFailure) {
-            rollback(target, backup, failed, originalBackedUp, installFailure);
-            throw installFailure;
+            if (!sha256(staged).equals(expectedHash)) {
+                throw new IOException("Staged update SHA-256 mismatch.");
+            }
+
+            Path backup = target.resolveSibling(target.getFileName() + ".backup");
+            Path failed = target.resolveSibling(target.getFileName() + ".failed");
+
+            Files.deleteIfExists(failed);
+            boolean originalBackedUp = false;
+            if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+                Files.move(target, backup, StandardCopyOption.REPLACE_EXISTING);
+                originalBackedUp = true;
+            }
+
+            try {
+                Files.move(staged, target, StandardCopyOption.REPLACE_EXISTING);
+                if (!sha256(target).equals(expectedHash)) {
+                    throw new IOException("Installed JAR failed post-install verification.");
+                }
+                System.out.println("[ArenaSystem Updater] Update installed successfully.");
+            } catch (Exception installFailure) {
+                rollback(target, backup, failed, originalBackedUp, installFailure);
+                throw installFailure;
+            }
         }
     }
 
@@ -127,9 +138,11 @@ public final class UpdaterMain {
         if (!staged.getFileName().toString().equalsIgnoreCase(EXPECTED_JAR + ".pending")) {
             throw new IllegalArgumentException("Unexpected staged filename.");
         }
+        Path lockFile = targetParent.resolve(UPDATE_LOCK_FILE);
         if (Files.isSymbolicLink(targetParent)
                 || Files.isSymbolicLink(target)
-                || Files.isSymbolicLink(staged)) {
+                || Files.isSymbolicLink(staged)
+                || Files.isSymbolicLink(lockFile)) {
             throw new IllegalArgumentException("Symbolic-link paths are not allowed.");
         }
         if (!Files.isDirectory(targetParent, LinkOption.NOFOLLOW_LINKS)) {
@@ -139,6 +152,34 @@ public final class UpdaterMain {
         Path modsDirectory = targetParent.toRealPath();
         if (!modsDirectory.getFileName().toString().equalsIgnoreCase("mods")) {
             throw new IllegalArgumentException("Target must be inside a Minecraft mods directory.");
+        }
+    }
+
+    private static FileLock waitForUpdateLock(FileChannel channel)
+            throws IOException, InterruptedException {
+        long timeoutMillis = Long.getLong(WAIT_TIMEOUT_PROPERTY, DEFAULT_WAIT_TIMEOUT_MILLIS);
+        if (timeoutMillis <= 0 || timeoutMillis > 900_000L) {
+            throw new IllegalArgumentException("Invalid updater lock timeout.");
+        }
+
+        long timeoutNanos = java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        long deadline = System.nanoTime() + timeoutNanos;
+        while (true) {
+            try {
+                FileLock lock = channel.tryLock();
+                if (lock != null) return lock;
+            } catch (OverlappingFileLockException ignored) {
+                // Another updater in this JVM already owns the lock.
+            }
+
+            long remainingNanos = deadline - System.nanoTime();
+            if (remainingNanos <= 0) {
+                throw new IllegalStateException("Timed out waiting for another updater instance.");
+            }
+            long sleepNanos = Math.min(
+                    remainingNanos,
+                    java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(POLL_INTERVAL_MILLIS));
+            java.util.concurrent.TimeUnit.NANOSECONDS.sleep(sleepNanos);
         }
     }
 
