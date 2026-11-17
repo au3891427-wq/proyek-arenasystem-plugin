@@ -1,0 +1,25 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'id.hadziq.arenasystem'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+application {
+    mainClass = 'id.hadziq.arenasystem.updater.UpdaterMain'
+}
+
+tasks.jar {
+    archiveBaseName = 'assassin-dagger-updater'
+    archiveVersion = project.version
+    manifest {
+        attributes 'Main-Class': application.mainClass.get()
+    }
+}
