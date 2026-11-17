@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "arenasystem_assassin_dagger",
+  "version": "${version}",
+  "name": "ArenaSystem Assassin Dagger",
+  "description": "Client-side visuals and secure update delivery for the ArenaSystem Assassin Dagger.",
+  "environment": "client",
+  "entrypoints": { "client": ["id.hadziq.arenasystem.assassin.AssassinDaggerClient"] },
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "=${minecraft_version}",
+    "java": ">=25"
+  }
+}
