@@ -117,8 +117,8 @@ final class UpdateService {
 
             Path staged = modsDirectory.resolve(MOD_JAR + ".pending");
             downloadVerified(downloadUri, staged, expectedHash, MAX_MOD_BYTES);
-            URI helperUri = helperAssetUri(remoteVersion);
-            downloadHelper(loader.getGameDir(), helperUri, requiredString(manifest, "helperSha256"));
+            downloadHelper(
+                    loader.getGameDir(), remoteVersion, requiredString(manifest, "helperSha256"));
 
             Runtime.getRuntime().addShutdownHook(new Thread(
                     () -> launchHelper(target, staged, expectedHash, loader.getGameDir()),
@@ -134,7 +134,7 @@ final class UpdateService {
     }
 
     private static synchronized boolean acquireUpdateLock(Path modsDirectory) throws IOException {
-        if (updateFileLock != null && updateFileLock.isValid()) return true;
+        if (updateFileLock != null && updateFileLock.isValid()) return false;
 
         Path lockPath = modsDirectory.resolve(UPDATE_LOCK_FILE);
         if (Files.isSymbolicLink(lockPath)) {
@@ -307,15 +307,14 @@ final class UpdateService {
         }
     }
 
-    private static void downloadHelper(Path gameDirectory, URI helperUri, String helperHash)
+    private static void downloadHelper(Path gameDirectory, String version, String helperHash)
             throws IOException, InterruptedException {
         if (!helperHash.matches("(?i)[a-f0-9]{64}")) {
             throw new IOException("Helper SHA-256 is malformed.");
         }
+        URI helperUri = helperAssetUri(version);
         validateReleaseAssetUrl(
-                helperUri.toString(), HELPER_JAR,
-                helperUri.getPath().substring(RELEASE_PATH_PREFIX.length(),
-                        helperUri.getPath().length() - HELPER_JAR.length() - 1));
+                helperUri.toString(), HELPER_JAR, "assassin-client-v" + version);
         Path helper = gameDirectory.resolve(".arenasystem/updater").resolve(HELPER_JAR);
         Path staged = helper.resolveSibling(helper.getFileName() + ".download");
         Files.createDirectories(helper.getParent());
@@ -398,8 +397,15 @@ final class UpdateService {
             if (!Files.isRegularFile(helper) || !Files.isRegularFile(staged)) {
                 throw new IOException("Helper or staged JAR is missing.");
             }
-            String javaw = Path.of(System.getProperty("java.home"), "bin", "javaw.exe").toString();
-            new ProcessBuilder(javaw, "-jar", helper.toString(),
+            Path javaBin = Path.of(System.getProperty("java.home"), "bin");
+            Path javaLauncher = javaBin.resolve("javaw.exe");
+            if (!Files.isRegularFile(javaLauncher)) {
+                javaLauncher = javaBin.resolve("java.exe");
+            }
+            if (!Files.isRegularFile(javaLauncher)) {
+                throw new IOException("Neither javaw.exe nor java.exe is available in java.home/bin.");
+            }
+            new ProcessBuilder(javaLauncher.toString(), "-jar", helper.toString(),
                     Long.toString(ProcessHandle.current().pid()), target.toString(), staged.toString(), hash)
                     .directory(gameDirectory.toFile())
                     .start();
