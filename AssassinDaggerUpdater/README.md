@@ -33,5 +33,6 @@ gradle clean build
 The runnable JAR is written to `build/libs/assassin-dagger-updater-0.1.0.jar`.
 
 The Windows CI workflow builds this helper and exercises installation, checksum rejection,
-missing-stage handling, process timeout, locked backup, and rollback after a locked staged-file move.
-An end-to-end test with an actual Minecraft shutdown hook is still required.
+missing-stage handling, process timeout, locked backup, rollback after a locked staged-file move,
+and serialization when two updater processes contend for the shared file lock. An end-to-end test
+with an actual Minecraft shutdown hook is still required.
