@@ -17,8 +17,9 @@ import java.util.HexFormat;
  * expected mod JAR.
  */
 public final class UpdaterMain {
-    private static final long WAIT_TIMEOUT_MILLIS = 180_000L;
+    private static final long DEFAULT_WAIT_TIMEOUT_MILLIS = 180_000L;
     private static final long POLL_INTERVAL_MILLIS = 500L;
+    private static final String WAIT_TIMEOUT_PROPERTY = "arenasystem.updater.waitTimeoutMillis";
     private static final String EXPECTED_JAR = "arenasystem-assassin-dagger-client.jar";
 
     private UpdaterMain() {
@@ -142,12 +143,22 @@ public final class UpdaterMain {
     }
 
     private static void waitForProcessExit(long pid) throws InterruptedException {
-        long deadline = System.currentTimeMillis() + WAIT_TIMEOUT_MILLIS;
+        long timeoutMillis = Long.getLong(WAIT_TIMEOUT_PROPERTY, DEFAULT_WAIT_TIMEOUT_MILLIS);
+        if (timeoutMillis <= 0 || timeoutMillis > 900_000L) {
+            throw new IllegalArgumentException("Invalid updater process wait timeout.");
+        }
+
+        long timeoutNanos = java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        long deadline = System.nanoTime() + timeoutNanos;
         while (ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false)) {
-            if (System.currentTimeMillis() >= deadline) {
+            long remainingNanos = deadline - System.nanoTime();
+            if (remainingNanos <= 0) {
                 throw new IllegalStateException("Timed out waiting for Minecraft to close.");
             }
-            Thread.sleep(POLL_INTERVAL_MILLIS);
+            long sleepNanos = Math.min(
+                    remainingNanos,
+                    java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(POLL_INTERVAL_MILLIS));
+            java.util.concurrent.TimeUnit.NANOSECONDS.sleep(sleepNanos);
         }
     }
 
