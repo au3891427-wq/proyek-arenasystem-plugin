@@ -29,7 +29,7 @@ jobs:
       - name: Build helper
         working-directory: AssassinDaggerUpdater
         run: gradle --no-daemon clean build
-      - name: Smoke-test Windows installation and checksum rejection
+      - name: Smoke-test Windows installation and failure handling
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -39,40 +39,140 @@ jobs:
           $target = Join-Path $mods "arenasystem-assassin-dagger-client.jar"
           $staged = "$target.pending"
           $backup = "$target.backup"
+          $failed = "$target.failed"
+
+          function Invoke-Updater {
+            param(
+              [string[]]$Arguments,
+              [long]$WaitTimeoutMillis = 0
+            )
+            if ($WaitTimeoutMillis -gt 0) {
+              & java "-Darenasystem.updater.waitTimeoutMillis=$WaitTimeoutMillis" -jar $helper @Arguments
+            }
+            else {
+              & java -jar $helper @Arguments
+            }
+            $exitCode = $LASTEXITCODE
+            $global:LASTEXITCODE = 0
+            return $exitCode
+          }
+
+          function Assert-NonZeroExit {
+            param([int]$ExitCode, [string]$Scenario)
+            if ($ExitCode -eq 0) {
+              throw "Updater unexpectedly succeeded: $Scenario"
+            }
+          }
 
           New-Item -ItemType Directory -Force -Path $mods | Out-Null
           try {
+            # 1. Normal install, post-install hash verification, and backup.
             [System.IO.File]::WriteAllText($target, "existing-client-jar")
             [System.IO.File]::WriteAllText($staged, "verified-client-update")
-            $expectedHash = (Get-FileHash $staged -Algorithm SHA256).Hash.ToLowerInvariant()
-
-            & java -jar $helper 2147483647 $target $staged $expectedHash
-            if ($LASTEXITCODE -ne 0) {
-              throw "Updater failed to install a valid staged JAR."
-            }
+            $validHash = (Get-FileHash $staged -Algorithm SHA256).Hash.ToLowerInvariant()
+            $exitCode = Invoke-Updater @("2147483647", $target, $staged, $validHash)
+            if ($exitCode -ne 0) { throw "Normal installation failed (exit $exitCode)." }
             if ([System.IO.File]::ReadAllText($target) -ne "verified-client-update") {
-              throw "Updater did not install the expected JAR contents."
+              throw "Updater did not install the expected JAR."
             }
             if ([System.IO.File]::ReadAllText($backup) -ne "existing-client-jar") {
-              throw "Updater did not preserve the previous JAR as a backup."
+              throw "Updater did not preserve the original JAR backup."
             }
-            if (Test-Path $staged) {
-              throw "Updater did not consume the staged JAR after installation."
-            }
+            if (Test-Path $staged) { throw "Updater did not consume the staged JAR." }
 
+            # 2. A bad checksum must not modify the active JAR or consume the staged file.
             [System.IO.File]::WriteAllText($staged, "tampered-client-update")
-            & java -jar $helper 2147483647 $target $staged ("0" * 64)
-            if ($LASTEXITCODE -eq 0) {
-              throw "Updater accepted a staged JAR with an invalid SHA-256."
-            }
-            # The non-zero exit code is expected for this negative test.
-            $global:LASTEXITCODE = 0
+            $exitCode = Invoke-Updater @("2147483647", $target, $staged, ("0" * 64))
+            Assert-NonZeroExit $exitCode "incorrect SHA-256"
             if ([System.IO.File]::ReadAllText($target) -ne "verified-client-update") {
               throw "Checksum rejection modified the active JAR."
             }
             if ([System.IO.File]::ReadAllText($staged) -ne "tampered-client-update") {
-              throw "Checksum rejection unexpectedly consumed the staged file."
+              throw "Checksum rejection consumed the staged file."
             }
+
+            # 3. Missing staged file must be rejected without touching the active JAR.
+            Remove-Item -LiteralPath $staged -Force
+            $exitCode = Invoke-Updater @("2147483647", $target, $staged, $validHash)
+            Assert-NonZeroExit $exitCode "missing staged JAR"
+            if ([System.IO.File]::ReadAllText($target) -ne "verified-client-update") {
+              throw "Missing staged JAR changed the active JAR."
+            }
+
+            # 4. An unexpected target filename must be rejected before any replacement.
+            $wrongTarget = Join-Path $mods "another-mod.jar"
+            $wrongStaged = "$wrongTarget.pending"
+            [System.IO.File]::WriteAllText($wrongTarget, "do-not-touch")
+            [System.IO.File]::WriteAllText($wrongStaged, "invalid-target-update")
+            $wrongHash = (Get-FileHash $wrongStaged -Algorithm SHA256).Hash.ToLowerInvariant()
+            $exitCode = Invoke-Updater @("2147483647", $wrongTarget, $wrongStaged, $wrongHash)
+            Assert-NonZeroExit $exitCode "unexpected target filename"
+            if ([System.IO.File]::ReadAllText($wrongTarget) -ne "do-not-touch") {
+              throw "Unexpected target file was modified."
+            }
+            if ([System.IO.File]::ReadAllText($target) -ne "verified-client-update") {
+              throw "Unexpected target attempt modified the real client JAR."
+            }
+
+            # 5. The helper must time out while this PowerShell process remains alive.
+            [System.IO.File]::WriteAllText($staged, "waiting-client-update")
+            $waitingHash = (Get-FileHash $staged -Algorithm SHA256).Hash.ToLowerInvariant()
+            $exitCode = Invoke-Updater @("$PID", $target, $staged, $waitingHash) 1200
+            Assert-NonZeroExit $exitCode "Minecraft process still running"
+            if ([System.IO.File]::ReadAllText($target) -ne "verified-client-update") {
+              throw "Timed-out updater changed the active JAR."
+            }
+            if (-not (Test-Path $staged)) { throw "Timed-out updater consumed the staged JAR." }
+
+            # 6. A locked backup destination simulates a backup-creation failure.
+            Remove-Item -LiteralPath $staged -Force
+            if (Test-Path $backup) { Remove-Item -LiteralPath $backup -Force }
+            $backupLock = [System.IO.File]::Open(
+              $backup,
+              [System.IO.FileMode]::CreateNew,
+              [System.IO.FileAccess]::ReadWrite,
+              [System.IO.FileShare]::None)
+            try {
+              [System.IO.File]::WriteAllText($staged, "backup-failure-update")
+              $backupFailureHash = (Get-FileHash $staged -Algorithm SHA256).Hash.ToLowerInvariant()
+              $exitCode = Invoke-Updater @("2147483647", $target, $staged, $backupFailureHash)
+              Assert-NonZeroExit $exitCode "backup destination locked"
+              if ([System.IO.File]::ReadAllText($target) -ne "verified-client-update") {
+                throw "Backup failure damaged the active JAR."
+              }
+              if (-not (Test-Path $staged)) { throw "Backup failure consumed the staged JAR." }
+            }
+            finally {
+              $backupLock.Dispose()
+            }
+
+            # 7. Locking the staged file allows the hash read but blocks its move.
+            #    The original JAR must be restored from the backup after install failure.
+            Remove-Item -LiteralPath $backup -Force
+            Remove-Item -LiteralPath $staged -Force
+            [System.IO.File]::WriteAllText($target, "original-before-rollback")
+            [System.IO.File]::WriteAllText($staged, "cannot-move-while-locked")
+            $rollbackHash = (Get-FileHash $staged -Algorithm SHA256).Hash.ToLowerInvariant()
+            $stageLock = [System.IO.File]::Open(
+              $staged,
+              [System.IO.FileMode]::Open,
+              [System.IO.FileAccess]::Read,
+              [System.IO.FileShare]::Read)
+            try {
+              $exitCode = Invoke-Updater @("2147483647", $target, $staged, $rollbackHash)
+              Assert-NonZeroExit $exitCode "staged JAR locked during installation"
+              if ([System.IO.File]::ReadAllText($target) -ne "original-before-rollback") {
+                throw "Failed installation did not restore the original JAR."
+              }
+              if ([System.IO.File]::ReadAllText($backup) -ne "original-before-rollback") {
+                throw "Rollback backup does not contain the original JAR."
+              }
+            }
+            finally {
+              $stageLock.Dispose()
+            }
+
+            Write-Host "All Windows updater smoke tests passed."
           }
           finally {
             if (Test-Path $testRoot) {
