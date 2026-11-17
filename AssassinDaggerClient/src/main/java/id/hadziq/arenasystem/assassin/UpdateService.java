@@ -106,8 +106,8 @@ final class UpdateService {
             throw new IOException("Manifest request returned HTTP " + response.statusCode());
         }
 
-        validateGitHubRedirect(response.uri());
         try (InputStream body = response.body()) {
+            validateGitHubRedirect(response.uri());
             byte[] bytes = body.readNBytes((int) MAX_MANIFEST_BYTES + 1);
             if (bytes.length > MAX_MANIFEST_BYTES) {
                 throw new IOException("Manifest exceeds the 64 KiB size limit.");
@@ -224,27 +224,33 @@ final class UpdateService {
                 .header("User-Agent", "ArenaSystem-AssassinDagger-Updater")
                 .GET()
                 .build();
+        MessageDigest digest = sha256Digest();
         HttpResponse<InputStream> response = HTTP.send(request, HttpResponse.BodyHandlers.ofInputStream());
         if (response.statusCode() != 200) {
             response.body().close();
             throw new IOException("Download returned HTTP " + response.statusCode());
         }
-        validateGitHubRedirect(response.uri());
 
         Path temporary = destination.resolveSibling(destination.getFileName() + ".part");
-        MessageDigest digest = sha256Digest();
         long total = 0;
-        try (InputStream input = response.body(); var output = Files.newOutputStream(temporary)) {
-            byte[] buffer = new byte[8192];
-            int read;
-            while ((read = input.read(buffer)) != -1) {
-                total += read;
-                if (total > maxBytes) throw new IOException("Download exceeds size limit.");
-                digest.update(buffer, 0, read);
-                output.write(buffer, 0, read);
+        try (InputStream input = response.body()) {
+            validateGitHubRedirect(response.uri());
+            try (var output = Files.newOutputStream(temporary)) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    total += read;
+                    if (total > maxBytes) throw new IOException("Download exceeds size limit.");
+                    digest.update(buffer, 0, read);
+                    output.write(buffer, 0, read);
+                }
             }
         } catch (IOException exception) {
-            Files.deleteIfExists(temporary);
+            try {
+                Files.deleteIfExists(temporary);
+            } catch (IOException cleanupFailure) {
+                exception.addSuppressed(cleanupFailure);
+            }
             throw exception;
         }
 
@@ -253,7 +259,16 @@ final class UpdateService {
             Files.deleteIfExists(temporary);
             throw new IOException("SHA-256 verification failed.");
         }
-        Files.move(temporary, destination, StandardCopyOption.REPLACE_EXISTING);
+        try {
+            Files.move(temporary, destination, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException moveFailure) {
+            try {
+                Files.deleteIfExists(temporary);
+            } catch (IOException cleanupFailure) {
+                moveFailure.addSuppressed(cleanupFailure);
+            }
+            throw moveFailure;
+        }
     }
 
     private static MessageDigest sha256Digest() throws IOException {
