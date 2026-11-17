@@ -33,7 +33,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: assassin-dagger-client
-          path: |
-            AssassinDaggerClient/build/libs/arenasystem-assassin-dagger-client-*.jar
-            !AssassinDaggerClient/build/libs/*-sources.jar
+          path: AssassinDaggerClient/build/libs/arenasystem-assassin-dagger-client.jar
           if-no-files-found: error
