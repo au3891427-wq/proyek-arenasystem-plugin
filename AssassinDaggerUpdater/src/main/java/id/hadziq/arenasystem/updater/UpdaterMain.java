@@ -63,7 +63,7 @@ public final class UpdaterMain {
 
         Path lockPath = target.getParent().resolve(UPDATE_LOCK_FILE);
         try (FileChannel lockChannel = FileChannel.open(
-                lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
              FileLock ignored = waitForUpdateLock(lockChannel)) {
             if (!Files.isRegularFile(staged, LinkOption.NOFOLLOW_LINKS)) {
                 throw new IOException("Staged update does not exist or is not a regular file.");
@@ -146,6 +146,9 @@ public final class UpdaterMain {
         }
         if (!Files.isDirectory(targetParent, LinkOption.NOFOLLOW_LINKS)) {
             throw new IllegalArgumentException("Mods directory does not exist or is not a real directory.");
+        }
+        if (!Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalArgumentException("Target JAR must already exist as a regular file.");
         }
 
         Path modsDirectory = targetParent.toRealPath();
