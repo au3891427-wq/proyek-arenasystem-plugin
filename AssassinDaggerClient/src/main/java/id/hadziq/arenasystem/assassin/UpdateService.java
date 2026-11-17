@@ -14,9 +14,13 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.HexFormat;
@@ -31,8 +35,9 @@ final class UpdateService {
             "/au3891427-wq/proyek-arenasystem-plugin/releases/download/";
     private static final URI MANIFEST_URI = URI.create(
             "https://github.com/au3891427-wq/proyek-arenasystem-plugin/releases/latest/download/update-manifest.json");
-    private static final URI HELPER_URI = URI.create(
-            "https://github.com/au3891427-wq/proyek-arenasystem-plugin/releases/latest/download/" + HELPER_JAR);
+    private static final String RELEASE_DOWNLOAD_PREFIX =
+            "https://github.com/au3891427-wq/proyek-arenasystem-plugin/releases/download/";
+    private static final String UPDATE_LOCK_FILE = ".arenasystem-assassin-dagger-update.lock";
     private static final long MAX_MANIFEST_BYTES = 64L * 1024;
     private static final long MAX_MOD_BYTES = 64L * 1024 * 1024;
     private static final long MAX_HELPER_BYTES = 8L * 1024 * 1024;
@@ -40,6 +45,8 @@ final class UpdateService {
             .connectTimeout(Duration.ofSeconds(15))
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
+    private static FileChannel updateLockChannel;
+    private static FileLock updateFileLock;
 
     private UpdateService() { }
 
@@ -60,6 +67,22 @@ final class UpdateService {
             System.out.println("[ArenaSystem] Update skipped: incompatible Minecraft version " + gameVersion);
             return;
         }
+
+        String minimumLoaderVersion = requiredString(manifest, "loaderVersion");
+        BigInteger[] minimumLoaderParts =
+                parseStableVersion(minimumLoaderVersion, "manifest loader version");
+        ModContainer loaderMod = loader.getModContainer("fabricloader")
+                .orElseThrow(() -> new IOException("Could not determine the installed Fabric Loader version."));
+        String installedLoaderVersion =
+                loaderMod.getMetadata().getVersion().getFriendlyString();
+        BigInteger[] installedLoaderParts =
+                parseStableVersion(installedLoaderVersion, "installed Fabric Loader version");
+        if (compareVersions(installedLoaderParts, minimumLoaderParts) < 0) {
+            System.out.println("[ArenaSystem] Update skipped: requires Fabric Loader "
+                    + minimumLoaderVersion + " or newer; installed " + installedLoaderVersion);
+            return;
+        }
+
         if (compareVersions(remoteParts, localParts) <= 0) return;
 
         Path target = localMod.get().getOrigin().getPaths().stream()
@@ -76,22 +99,103 @@ final class UpdateService {
             throw new IOException("Mod must be installed directly inside a mods directory.");
         }
 
-        URI downloadUri = validateReleaseAssetUrl(
-                requiredString(manifest, "downloadUrl"), MOD_JAR, "assassin-client-v" + remoteVersion);
-        String expectedHash = requiredString(manifest, "sha256").toLowerCase(Locale.ROOT);
-        if (!expectedHash.matches("[a-f0-9]{64}")) {
-            throw new IOException("Manifest SHA-256 is malformed.");
+        if (!acquireUpdateLock(modsDirectory)) {
+            System.out.println("[ArenaSystem] Another Assassin Dagger update is already in progress; skipping this check.");
+            return;
         }
 
-        Path staged = modsDirectory.resolve(MOD_JAR + ".pending");
-        downloadVerified(downloadUri, staged, expectedHash, MAX_MOD_BYTES);
-        downloadHelper(loader.getGameDir(), requiredString(manifest, "helperSha256"));
+        boolean shutdownHookRegistered = false;
+        try {
+            URI downloadUri = validateReleaseAssetUrl(
+                    requiredString(manifest, "downloadUrl"),
+                    MOD_JAR,
+                    "assassin-client-v" + remoteVersion);
+            String expectedHash = requiredString(manifest, "sha256").toLowerCase(Locale.ROOT);
+            if (!expectedHash.matches("[a-f0-9]{64}")) {
+                throw new IOException("Manifest SHA-256 is malformed.");
+            }
 
-        Runtime.getRuntime().addShutdownHook(new Thread(
-                () -> launchHelper(target, staged, expectedHash, loader.getGameDir()),
-                "ArenaSystem-Update-Installer"));
-        System.out.println("[ArenaSystem] Update " + remoteVersion
-                + " downloaded and verified; installation is queued for game shutdown.");
+            Path staged = modsDirectory.resolve(MOD_JAR + ".pending");
+            downloadVerified(downloadUri, staged, expectedHash, MAX_MOD_BYTES);
+            URI helperUri = helperAssetUri(remoteVersion);
+            downloadHelper(loader.getGameDir(), helperUri, requiredString(manifest, "helperSha256"));
+
+            Runtime.getRuntime().addShutdownHook(new Thread(
+                    () -> launchHelper(target, staged, expectedHash, loader.getGameDir()),
+                    "ArenaSystem-Update-Installer"));
+            shutdownHookRegistered = true;
+            System.out.println("[ArenaSystem] Update " + remoteVersion
+                    + " downloaded and verified; installation is queued for game shutdown.");
+        } finally {
+            if (!shutdownHookRegistered) {
+                releaseUpdateLock();
+            }
+        }
+    }
+
+    private static synchronized boolean acquireUpdateLock(Path modsDirectory) throws IOException {
+        if (updateFileLock != null && updateFileLock.isValid()) return true;
+
+        Path lockPath = modsDirectory.resolve(UPDATE_LOCK_FILE);
+        if (Files.isSymbolicLink(lockPath)) {
+            throw new IOException("Updater lock path must not be a symbolic link.");
+        }
+
+        FileChannel channel = FileChannel.open(
+                lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        try {
+            FileLock lock;
+            try {
+                lock = channel.tryLock();
+            } catch (OverlappingFileLockException exception) {
+                lock = null;
+            }
+            if (lock == null) {
+                channel.close();
+                return false;
+            }
+            updateLockChannel = channel;
+            updateFileLock = lock;
+            return true;
+        } catch (IOException | RuntimeException exception) {
+            try {
+                channel.close();
+            } catch (IOException closeFailure) {
+                exception.addSuppressed(closeFailure);
+            }
+            throw exception;
+        }
+    }
+
+    private static synchronized void releaseUpdateLock() {
+        IOException failure = null;
+        if (updateFileLock != null) {
+            try {
+                updateFileLock.release();
+            } catch (IOException exception) {
+                failure = exception;
+            } finally {
+                updateFileLock = null;
+            }
+        }
+        if (updateLockChannel != null) {
+            try {
+                updateLockChannel.close();
+            } catch (IOException exception) {
+                if (failure == null) failure = exception;
+                else failure.addSuppressed(exception);
+            } finally {
+                updateLockChannel = null;
+            }
+        }
+        if (failure != null) {
+            System.err.println("[ArenaSystem] Could not release updater lock: " + failure.getMessage());
+        }
+    }
+
+    private static URI helperAssetUri(String version) {
+        return URI.create(RELEASE_DOWNLOAD_PREFIX
+                + "assassin-client-v" + version + "/" + HELPER_JAR);
     }
 
     private static JsonObject fetchManifest() throws IOException, InterruptedException {
@@ -141,6 +245,7 @@ final class UpdateService {
         }
         String version = requiredString(manifest, "version");
         parseStableVersion(version, "manifest version");
+        parseStableVersion(requiredString(manifest, "loaderVersion"), "manifest loader version");
         validateReleaseAssetUrl(
                 requiredString(manifest, "downloadUrl"), MOD_JAR, "assassin-client-v" + version);
         String modHash = requiredString(manifest, "sha256");
@@ -202,15 +307,19 @@ final class UpdateService {
         }
     }
 
-    private static void downloadHelper(Path gameDirectory, String helperHash)
+    private static void downloadHelper(Path gameDirectory, URI helperUri, String helperHash)
             throws IOException, InterruptedException {
         if (!helperHash.matches("(?i)[a-f0-9]{64}")) {
             throw new IOException("Helper SHA-256 is malformed.");
         }
+        validateReleaseAssetUrl(
+                helperUri.toString(), HELPER_JAR,
+                helperUri.getPath().substring(RELEASE_PATH_PREFIX.length(),
+                        helperUri.getPath().length() - HELPER_JAR.length() - 1));
         Path helper = gameDirectory.resolve(".arenasystem/updater").resolve(HELPER_JAR);
         Path staged = helper.resolveSibling(helper.getFileName() + ".download");
         Files.createDirectories(helper.getParent());
-        downloadVerified(HELPER_URI, staged, helperHash, MAX_HELPER_BYTES);
+        downloadVerified(helperUri, staged, helperHash, MAX_HELPER_BYTES);
         Files.move(staged, helper, StandardCopyOption.REPLACE_EXISTING);
     }
 
