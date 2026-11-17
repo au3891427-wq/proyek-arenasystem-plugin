@@ -76,7 +76,8 @@ final class UpdateService {
             throw new IOException("Mod must be installed directly inside a mods directory.");
         }
 
-        URI downloadUri = validateReleaseAssetUrl(requiredString(manifest, "downloadUrl"), MOD_JAR);
+        URI downloadUri = validateReleaseAssetUrl(
+                requiredString(manifest, "downloadUrl"), MOD_JAR, "assassin-client-v" + remoteVersion);
         String expectedHash = requiredString(manifest, "sha256").toLowerCase(Locale.ROOT);
         if (!expectedHash.matches("[a-f0-9]{64}")) {
             throw new IOException("Manifest SHA-256 is malformed.");
@@ -138,8 +139,10 @@ final class UpdateService {
         if (!"fabric".equals(requiredString(manifest, "loader"))) {
             throw new IOException("Manifest loader is not Fabric.");
         }
-        parseStableVersion(requiredString(manifest, "version"), "manifest version");
-        validateReleaseAssetUrl(requiredString(manifest, "downloadUrl"), MOD_JAR);
+        String version = requiredString(manifest, "version");
+        parseStableVersion(version, "manifest version");
+        validateReleaseAssetUrl(
+                requiredString(manifest, "downloadUrl"), MOD_JAR, "assassin-client-v" + version);
         String modHash = requiredString(manifest, "sha256");
         String helperHash = requiredString(manifest, "helperSha256");
         if (!modHash.matches("(?i)[a-f0-9]{64}") || !helperHash.matches("(?i)[a-f0-9]{64}")) {
@@ -158,7 +161,8 @@ final class UpdateService {
         return value;
     }
 
-    private static URI validateReleaseAssetUrl(String value, String expectedAsset) throws IOException {
+    private static URI validateReleaseAssetUrl(
+            String value, String expectedAsset, String expectedTag) throws IOException {
         final URI uri;
         try {
             uri = URI.create(value);
@@ -181,10 +185,17 @@ final class UpdateService {
             throw new IOException("Download URL does not point to the expected release asset.");
         }
         String tag = path.substring(RELEASE_PATH_PREFIX.length(), path.length() - expectedAsset.length() - 1);
-        if (tag.isBlank() || tag.contains("/")) {
-            throw new IOException("Download URL contains an invalid release tag.");
+        if (tag.isBlank() || tag.contains("/") || !tag.equals(expectedTag)) {
+            throw new IOException("Download URL tag does not match the manifest version.");
         }
         return uri;
+    }
+
+    private static String extractReleaseTag(URI uri) {
+        String path = uri.getPath();
+        int start = RELEASE_PATH_PREFIX.length();
+        int end = path.length() - MOD_JAR.length() - 1;
+        return path.substring(start, end);
     }
 
     private static void validateGitHubRedirect(URI uri) throws IOException {
@@ -216,7 +227,7 @@ final class UpdateService {
         if (uri.equals(HELPER_URI)) {
             validateGitHubRedirect(uri);
         } else {
-            validateReleaseAssetUrl(uri.toString(), expectedAsset);
+            validateReleaseAssetUrl(uri.toString(), expectedAsset, extractReleaseTag(uri));
         }
 
         HttpRequest request = HttpRequest.newBuilder(uri)
