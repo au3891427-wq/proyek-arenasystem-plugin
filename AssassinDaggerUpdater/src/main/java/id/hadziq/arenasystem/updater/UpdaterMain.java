@@ -76,10 +76,10 @@ public final class UpdaterMain {
             Path failed = target.resolveSibling(target.getFileName() + ".failed");
 
             Files.deleteIfExists(failed);
-            boolean originalBackedUp = false;
-            if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-                Files.move(target, backup, StandardCopyOption.REPLACE_EXISTING);
-                originalBackedUp = true;
+            String originalHash = sha256(target);
+            Files.copy(target, backup, StandardCopyOption.REPLACE_EXISTING);
+            if (!sha256(backup).equals(originalHash)) {
+                throw new IOException("Backup JAR failed SHA-256 verification; original JAR was not changed.");
             }
 
             try {
@@ -89,7 +89,7 @@ public final class UpdaterMain {
                 }
                 System.out.println("[ArenaSystem Updater] Update installed successfully.");
             } catch (Exception installFailure) {
-                rollback(target, backup, failed, originalBackedUp, installFailure);
+                rollback(target, backup, failed, true, installFailure);
                 throw installFailure;
             }
         }
@@ -101,25 +101,34 @@ public final class UpdaterMain {
             Path failed,
             boolean originalBackedUp,
             Exception installFailure) {
-        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-            try {
-                Files.move(target, failed, StandardCopyOption.REPLACE_EXISTING);
-            } catch (Exception quarantineFailure) {
-                installFailure.addSuppressed(quarantineFailure);
-            }
+        if (!originalBackedUp || !Files.isRegularFile(backup, LinkOption.NOFOLLOW_LINKS)) {
+            return;
         }
 
-        if (originalBackedUp && Files.exists(backup, LinkOption.NOFOLLOW_LINKS)) {
-            try {
-                Files.copy(backup, target, StandardCopyOption.REPLACE_EXISTING);
-                if (!sha256(target).equals(sha256(backup))) {
-                    throw new IOException("Restored backup failed SHA-256 verification.");
-                }
-                System.err.println("[ArenaSystem Updater] Original JAR restored from backup.");
-            } catch (Exception restoreFailure) {
-                installFailure.addSuppressed(restoreFailure);
-                System.err.println("[ArenaSystem Updater] Rollback failed; backup retained at: " + backup);
+        try {
+            String backupHash = sha256(backup);
+            if (Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)
+                    && sha256(target).equals(backupHash)) {
+                System.err.println("[ArenaSystem Updater] Original JAR remained intact; backup verified.");
+                return;
             }
+
+            if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+                try {
+                    Files.move(target, failed, StandardCopyOption.REPLACE_EXISTING);
+                } catch (Exception quarantineFailure) {
+                    installFailure.addSuppressed(quarantineFailure);
+                }
+            }
+
+            Files.copy(backup, target, StandardCopyOption.REPLACE_EXISTING);
+            if (!sha256(target).equals(backupHash)) {
+                throw new IOException("Restored backup failed SHA-256 verification.");
+            }
+            System.err.println("[ArenaSystem Updater] Original JAR restored from backup.");
+        } catch (Exception restoreFailure) {
+            installFailure.addSuppressed(restoreFailure);
+            System.err.println("[ArenaSystem Updater] Rollback failed; backup retained at: " + backup);
         }
     }
 
