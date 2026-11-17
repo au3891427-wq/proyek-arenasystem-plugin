@@ -10,6 +10,10 @@ base {
     archivesName = project.archives_base_name
 }
 
+repositories {
+    mavenCentral()
+}
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
@@ -35,6 +39,7 @@ java {
     withSourcesJar()
 }
 
-jar {
+tasks.named('jar') {
+    archiveFileName = 'arenasystem-assassin-dagger-client.jar'
     from("LICENSE") { rename { "${it}_${project.base.archivesName.get()}" } }
 }
