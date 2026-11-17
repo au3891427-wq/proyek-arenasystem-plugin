@@ -172,6 +172,65 @@ jobs:
               $stageLock.Dispose()
             }
 
+            # 8. A second updater must wait while another process owns the shared file lock.
+            $lockHolderSource = Join-Path $testRoot "UpdaterLockHolder.java"
+            @'
+          import java.nio.channels.FileChannel;
+          import java.nio.channels.FileLock;
+          import java.nio.file.Files;
+          import java.nio.file.Path;
+          import java.nio.file.StandardOpenOption;
+
+          public final class UpdaterLockHolder {
+              public static void main(String[] args) throws Exception {
+                  Path lockPath = Path.of(args[0]);
+                  Path readyPath = Path.of(args[1]);
+                  long holdMillis = Long.parseLong(args[2]);
+                  try (FileChannel channel = FileChannel.open(
+                              lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                       FileLock ignored = channel.lock()) {
+                      Files.writeString(readyPath, "locked");
+                      Thread.sleep(holdMillis);
+                  }
+              }
+          }
+          '@ | Set-Content -LiteralPath $lockHolderSource -Encoding utf8
+
+            & javac $lockHolderSource
+            if ($LASTEXITCODE -ne 0) { throw "Could not compile the test lock-holder process." }
+            $global:LASTEXITCODE = 0
+
+            $lockPath = Join-Path $mods ".arenasystem-assassin-dagger-update.lock"
+            $readyPath = Join-Path $testRoot "lock-holder-ready.txt"
+            [System.IO.File]::WriteAllText($target, "before-concurrent-update")
+            [System.IO.File]::WriteAllText($staged, "after-concurrent-update")
+            $concurrentHash = (Get-FileHash $staged -Algorithm SHA256).Hash.ToLowerInvariant()
+            $lockArguments = "-cp `"$testRoot`" UpdaterLockHolder `"$lockPath`" `"$readyPath`" 2500"
+            $lockHolder = Start-Process -FilePath "java" -ArgumentList $lockArguments -PassThru -NoNewWindow
+            $readyDeadline = [DateTime]::UtcNow.AddSeconds(10)
+            while (-not (Test-Path $readyPath) -and [DateTime]::UtcNow -lt $readyDeadline) {
+              Start-Sleep -Milliseconds 100
+            }
+            if (-not (Test-Path $readyPath)) {
+              if (-not $lockHolder.HasExited) { Stop-Process -Id $lockHolder.Id -Force }
+              throw "The test lock-holder did not acquire the updater lock."
+            }
+
+            $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+            $exitCode = Invoke-Updater @("2147483647", $target, $staged, $concurrentHash)
+            $stopwatch.Stop()
+            $lockHolder.WaitForExit()
+            if ($exitCode -ne 0) { throw "Updater failed after the other lock was released (exit $exitCode)." }
+            if ($stopwatch.ElapsedMilliseconds -lt 1500) {
+              throw "Updater did not wait for the lock held by the other process."
+            }
+            if ([System.IO.File]::ReadAllText($target) -ne "after-concurrent-update") {
+              throw "Updater did not install after acquiring the shared lock."
+            }
+            if ([System.IO.File]::ReadAllText($backup) -ne "before-concurrent-update") {
+              throw "Concurrent update did not preserve the previous JAR."
+            }
+
             Write-Host "All Windows updater smoke tests passed."
           }
           finally {
