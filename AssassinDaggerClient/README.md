@@ -44,10 +44,12 @@ The manifest must include:
 - `helperSha256`
 - `loaderVersion` (minimum Fabric Loader version required by the release)
 
-Manual release-workflow dispatch is dry-run only. It builds the client and helper, derives Minecraft
-and Loader versions from `gradle.properties`, validates the manifest, and uploads the three assets
-as a workflow artifact. Production releases are published only by pushing an
-`assassin-client-vX.Y.Z` tag.
+Pull requests and manual workflow dispatch run in dry-run mode: they build the client and helper,
+derive Minecraft and Loader versions from `gradle.properties`, validate the embedded
+`fabric.mod.json` metadata and generated manifest, and upload the three assets as a workflow
+artifact. Only pushing an `assassin-client-vX.Y.Z` tag can publish a GitHub Release. The
+preparation job has read-only repository permissions; write permission exists only in the
+tag-triggered publish job.
 
 ## Windows install flow
 
