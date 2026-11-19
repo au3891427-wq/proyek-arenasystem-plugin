@@ -27,10 +27,11 @@ Output: `build/libs/arenasystem-assassin-dagger-client.jar`.
 
 ## Automatic stable releases and updates
 
-The client checks GitHub Releases in the background every time Minecraft starts. When a newer
-compatible stable version is found, it downloads the client JAR and Windows helper, verifies
-their SHA-256 hashes, and stages the update. On Windows, the helper installs the JAR after
-Minecraft fully exits and keeps a verified backup for rollback.
+The client checks the dedicated public file `assassin-client-update-manifest.json` on GitHub in
+the background every time Minecraft starts. When a newer compatible stable version is found,
+it downloads the client JAR and Windows helper from that release, verifies their SHA-256 hashes,
+and stages the update. On Windows, the helper installs the JAR after Minecraft fully exits and
+keeps a verified backup for rollback.
 
 Stable release publication is automated:
 
@@ -38,14 +39,16 @@ Stable release publication is automated:
   this release workflow builds and validates the client and helper.
 - The release version comes from `mod_version` in `AssassinDaggerClient/gradle.properties`.
 - If `assassin-client-v<version>` does not already exist, GitHub Actions creates the stable
-  release, uploads the client JAR, updater helper, and generated `update-manifest.json`.
+  release, uploads the client JAR, updater helper, and generated `update-manifest.json`, then
+  commits the same manifest to the repository root as `assassin-client-update-manifest.json`.
 - A version that already has a release is never overwritten. Bump `mod_version` for each
   new client release.
 - Pushing a tag such as `assassin-client-v0.1.1` also publishes that exact version.
 - Pull requests and manual workflow runs default to dry-run and cannot publish accidentally.
 
-Only stable releases are checked by the client. The existing `plugin` release is a prerelease,
-so it is not selected as the Assassin client update.
+The client reads only the dedicated Assassin manifest, not GitHub's generic latest-release
+endpoint. This prevents a stable Paper plugin release from accidentally being treated as a
+Fabric client update. The existing `plugin` prerelease is also ignored.
 
 **Scope:** this updater replaces only the Fabric client JAR on Windows, when Minecraft exits.
 It does not update the Paper server plugin. Other operating systems download and verify an update
