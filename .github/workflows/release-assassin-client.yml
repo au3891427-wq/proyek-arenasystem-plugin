@@ -293,6 +293,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Check out main for the public update manifest
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
       - name: Download prepared release assets
         uses: actions/download-artifact@v4
         with:
@@ -310,3 +316,37 @@ jobs:
           generate_release_notes: true
           files: |
             release-assets/*
+
+      - name: Update the public Assassin client manifest
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $manifestSource = "release-assets/update-manifest.json"
+          $manifestTarget = "assassin-client-update-manifest.json"
+          if (-not (Test-Path $manifestSource -PathType Leaf)) {
+            throw "Generated update manifest is missing."
+          }
+
+          $newManifest = Get-Content -Raw $manifestSource | ConvertFrom-Json
+          if (-not $newManifest.version -or $newManifest.channel -ne "stable") {
+            throw "Generated update manifest is not a stable client manifest."
+          }
+
+          if (Test-Path $manifestTarget -PathType Leaf) {
+            $currentManifest = Get-Content -Raw $manifestTarget | ConvertFrom-Json
+            if ($currentManifest.version) {
+              if ([version]$currentManifest.version -ge [version]$newManifest.version) {
+                Write-Host "The public manifest already points to an equal or newer client version."
+                exit 0
+              }
+            }
+          }
+
+          Copy-Item $manifestSource $manifestTarget -Force
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add $manifestTarget
+          git commit -m "Publish Assassin client update manifest for $env:RELEASE_TAG"
+          git push origin HEAD:main
