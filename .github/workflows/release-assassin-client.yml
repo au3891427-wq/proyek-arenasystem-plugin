@@ -2,8 +2,14 @@ name: Release Assassin Dagger Client
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "assassin-client-v*"
+    paths:
+      - "AssassinDaggerClient/**"
+      - "AssassinDaggerUpdater/**"
+      - ".github/workflows/release-assassin-client.yml"
   pull_request:
     paths:
       - "AssassinDaggerClient/**"
@@ -17,7 +23,7 @@ on:
         default: "0.1.0"
         type: string
       dry_run:
-        description: "Build and validate assets without publishing a GitHub Release"
+        description: "Dry-run when true; production publishing runs from main when false"
         required: true
         default: true
         type: boolean
@@ -28,6 +34,9 @@ permissions:
 jobs:
   prepare:
     runs-on: windows-latest
+    outputs:
+      release_tag: ${{ steps.prepare_assets.outputs.release_tag }}
+      should_publish: ${{ steps.prepare_assets.outputs.should_publish }}
     permissions:
       contents: read
     steps:
@@ -64,10 +73,19 @@ jobs:
             $version = ($versionLine -split '=', 2)[1].Trim()
           }
           else {
-            if ($env:REF_TYPE -ne "tag" -or $env:REF_NAME -notmatch '^assassin-client-v\d+\.\d+\.\d+$') {
-              throw "Release builds must be triggered by an assassin-client-vX.Y.Z tag."
+            if ($env:REF_TYPE -eq "tag" -and $env:REF_NAME -match '^assassin-client-v\d+\.\d+\.\d+$') {
+              $version = $env:REF_NAME -replace '^assassin-client-v', ''
             }
-            $version = $env:REF_NAME -replace '^assassin-client-v', ''
+            elseif ($env:EVENT_NAME -eq "push" -and $env:REF_TYPE -eq "branch" -and $env:REF_NAME -eq "main") {
+              $versionLine = Get-Content "gradle.properties" |
+                Where-Object { $_ -match '^mod_version=' } |
+                Select-Object -First 1
+              if (-not $versionLine) { throw "mod_version is missing from gradle.properties." }
+              $version = ($versionLine -split '=', 2)[1].Trim()
+            }
+            else {
+              throw "Production releases must come from main or an assassin-client-vX.Y.Z tag."
+            }
           }
 
           if ($version -notmatch '^\d+\.\d+\.\d+$') {
@@ -80,6 +98,7 @@ jobs:
         run: gradle --no-daemon clean build
 
       - name: Prepare and validate release assets
+        id: prepare_assets
         shell: pwsh
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -88,13 +107,15 @@ jobs:
           DISPATCH_VERSION: ${{ inputs.version }}
           DRY_RUN: ${{ inputs.dry_run }}
           REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = "Stop"
-          $isDryRun = $env:EVENT_NAME -ne "push"
+          $isDryRun = $env:EVENT_NAME -eq "pull_request" -or
+            ($env:EVENT_NAME -eq "workflow_dispatch" -and $env:DRY_RUN -eq "true")
 
           if ($env:EVENT_NAME -eq "workflow_dispatch") {
-            if ($env:DRY_RUN -ne "true") {
-              throw "Manual workflow dispatch is dry-run only. Publish production releases by pushing a version tag."
+            if ($env:DRY_RUN -ne "true" -and $env:REF_NAME -ne "main") {
+              throw "Manual production publishing is allowed only from the main branch."
             }
             $version = $env:DISPATCH_VERSION
           }
@@ -106,10 +127,19 @@ jobs:
             $version = ($versionLine -split '=', 2)[1].Trim()
           }
           else {
-            if ($env:REF_TYPE -ne "tag" -or $env:REF_NAME -notmatch '^assassin-client-v\d+\.\d+\.\d+$') {
-              throw "Unexpected release ref; expected assassin-client-vX.Y.Z."
+            if ($env:REF_TYPE -eq "tag" -and $env:REF_NAME -match '^assassin-client-v\d+\.\d+\.\d+$') {
+              $version = $env:REF_NAME -replace '^assassin-client-v', ''
             }
-            $version = $env:REF_NAME -replace '^assassin-client-v', ''
+            elseif ($env:EVENT_NAME -eq "push" -and $env:REF_TYPE -eq "branch" -and $env:REF_NAME -eq "main") {
+              $versionLine = Get-Content "AssassinDaggerClient/gradle.properties" |
+                Where-Object { $_ -match '^mod_version=' } |
+                Select-Object -First 1
+              if (-not $versionLine) { throw "mod_version is missing from gradle.properties." }
+              $version = ($versionLine -split '=', 2)[1].Trim()
+            }
+            else {
+              throw "Production releases must come from main or an assassin-client-vX.Y.Z tag."
+            }
           }
 
           if ($version -notmatch '^\d+\.\d+\.\d+$') {
@@ -117,7 +147,7 @@ jobs:
           }
 
           $tag = "assassin-client-v$version"
-          if (-not $isDryRun -and $tag -ne $env:REF_NAME) {
+          if (-not $isDryRun -and $env:REF_TYPE -eq "tag" -and $tag -ne $env:REF_NAME) {
             throw "Release tag and build version do not match."
           }
 
@@ -136,6 +166,10 @@ jobs:
 
           $minecraftVersion = $properties["minecraft_version"]
           $loaderVersion = $properties["loader_version"]
+          if ($env:EVENT_NAME -eq "workflow_dispatch" -and $env:DRY_RUN -ne "true" -and
+              $properties["mod_version"] -ne $version) {
+            throw "Manual release version must match AssassinDaggerClient/gradle.properties mod_version."
+          }
           $clientPath = "AssassinDaggerClient/build/libs/arenasystem-assassin-dagger-client.jar"
           $helperPath = "AssassinDaggerUpdater/build/libs/assassin-dagger-updater-0.1.0.jar"
           if (-not (Test-Path $clientPath -PathType Leaf)) { throw "Client JAR is missing: $clientPath" }
@@ -216,6 +250,35 @@ jobs:
           if ($assetCount -ne 3) { throw "Expected 3 release assets, found $assetCount." }
           Write-Host "Prepared 3 assets for $tag (Minecraft $minecraftVersion, Fabric Loader $loaderVersion)."
 
+          $shouldPublish = "false"
+          if (-not $isDryRun) {
+            $headers = @{
+              Accept = "application/vnd.github+json"
+              Authorization = "Bearer $env:GITHUB_TOKEN"
+              "X-GitHub-Api-Version" = "2022-11-28"
+            }
+            $releaseLookupUrl = "https://api.github.com/repos/$($env:REPOSITORY)/releases/tags/$tag"
+            try {
+              Invoke-RestMethod -Method Get -Uri $releaseLookupUrl -Headers $headers | Out-Null
+              Write-Host "Release $tag already exists; refusing to overwrite it."
+            }
+            catch {
+              $statusCode = 0
+              if ($_.Exception.Response -and $_.Exception.Response.StatusCode) {
+                $statusCode = [int]$_.Exception.Response.StatusCode
+              }
+              if ($statusCode -eq 404) {
+                $shouldPublish = "true"
+              }
+              else {
+                throw
+              }
+            }
+          }
+
+          "release_tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "should_publish=$shouldPublish" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
       - name: Upload prepared release assets
         uses: actions/upload-artifact@v4
         with:
@@ -224,7 +287,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/assassin-client-v')
+    if: needs.prepare.outputs.should_publish == 'true'
     needs: prepare
     runs-on: windows-latest
     permissions:
@@ -239,8 +302,11 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Assassin Dagger Client ${{ github.ref_name }}
+          name: Assassin Dagger Client ${{ needs.prepare.outputs.release_tag }}
+          tag_name: ${{ needs.prepare.outputs.release_tag }}
+          target_commitish: ${{ github.sha }}
           draft: false
           prerelease: false
+          generate_release_notes: true
           files: |
             release-assets/*
