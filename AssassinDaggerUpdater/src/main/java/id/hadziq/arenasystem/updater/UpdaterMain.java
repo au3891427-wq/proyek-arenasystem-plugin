@@ -1,9 +1,14 @@
 package id.hadziq.arenasystem.updater;
 
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -11,14 +16,16 @@ import java.util.HexFormat;
 /**
  * Minimal Windows-safe replacement helper.
  *
- * The client mod is responsible for downloading the staged JAR and launching
- * this helper during JVM shutdown. This process waits for the Minecraft PID,
- * verifies the staged file, then replaces only the expected mod JAR.
+ * The client mod launches this helper during JVM shutdown. This process waits
+ * for the Minecraft PID, verifies the staged file, then replaces only the
+ * expected mod JAR.
  */
 public final class UpdaterMain {
-    private static final long WAIT_TIMEOUT_MILLIS = 180_000L;
+    private static final long DEFAULT_WAIT_TIMEOUT_MILLIS = 180_000L;
     private static final long POLL_INTERVAL_MILLIS = 500L;
+    private static final String WAIT_TIMEOUT_PROPERTY = "arenasystem.updater.waitTimeoutMillis";
     private static final String EXPECTED_JAR = "arenasystem-assassin-dagger-client.jar";
+    private static final String UPDATE_LOCK_FILE = ".arenasystem-assassin-dagger-update.lock";
 
     private UpdaterMain() {
     }
@@ -45,7 +52,7 @@ public final class UpdaterMain {
 
         Path target = Path.of(args[1]).toAbsolutePath().normalize();
         Path staged = Path.of(args[2]).toAbsolutePath().normalize();
-        String expectedHash = args[3].toLowerCase();
+        String expectedHash = args[3].toLowerCase(java.util.Locale.ROOT);
 
         if (!expectedHash.matches("[a-f0-9]{64}")) {
             throw new IllegalArgumentException("Invalid SHA-256 value.");
@@ -54,36 +61,74 @@ public final class UpdaterMain {
         validatePaths(target, staged);
         waitForProcessExit(minecraftPid);
 
-        if (!Files.isRegularFile(staged)) {
-            throw new IOException("Staged update does not exist.");
-        }
-        if (!sha256(staged).equals(expectedHash)) {
-            throw new IOException("Staged update SHA-256 mismatch.");
-        }
+        Path lockPath = target.getParent().resolve(UPDATE_LOCK_FILE);
+        try (FileChannel lockChannel = FileChannel.open(
+                lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
+             FileLock ignored = waitForUpdateLock(lockChannel)) {
+            if (!Files.isRegularFile(staged, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("Staged update does not exist or is not a regular file.");
+            }
+            if (!sha256(staged).equals(expectedHash)) {
+                throw new IOException("Staged update SHA-256 mismatch.");
+            }
 
-        Path backup = target.resolveSibling(target.getFileName() + ".backup");
-        Path failed = target.resolveSibling(target.getFileName() + ".failed");
+            Path backup = target.resolveSibling(target.getFileName() + ".backup");
+            Path failed = target.resolveSibling(target.getFileName() + ".failed");
 
-        Files.deleteIfExists(failed);
-        if (Files.exists(target)) {
-            Files.move(target, backup, StandardCopyOption.REPLACE_EXISTING);
+            Files.deleteIfExists(failed);
+            String originalHash = sha256(target);
+            Files.copy(target, backup, StandardCopyOption.REPLACE_EXISTING);
+            if (!sha256(backup).equals(originalHash)) {
+                throw new IOException("Backup JAR failed SHA-256 verification; original JAR was not changed.");
+            }
+
+            try {
+                Files.move(staged, target, StandardCopyOption.REPLACE_EXISTING);
+                if (!sha256(target).equals(expectedHash)) {
+                    throw new IOException("Installed JAR failed post-install verification.");
+                }
+                System.out.println("[ArenaSystem Updater] Update installed successfully.");
+            } catch (Exception installFailure) {
+                rollback(target, backup, failed, true, installFailure);
+                throw installFailure;
+            }
+        }
+    }
+
+    private static void rollback(
+            Path target,
+            Path backup,
+            Path failed,
+            boolean originalBackedUp,
+            Exception installFailure) {
+        if (!originalBackedUp || !Files.isRegularFile(backup, LinkOption.NOFOLLOW_LINKS)) {
+            return;
         }
 
         try {
-            Files.move(staged, target, StandardCopyOption.REPLACE_EXISTING);
-            if (!sha256(target).equals(expectedHash)) {
-                throw new IOException("Installed JAR failed post-install verification.");
+            String backupHash = sha256(backup);
+            if (Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)
+                    && sha256(target).equals(backupHash)) {
+                System.err.println("[ArenaSystem Updater] Original JAR remained intact; backup verified.");
+                return;
             }
-            System.out.println("[ArenaSystem Updater] Update installed successfully.");
-        } catch (Exception installFailure) {
-            Files.deleteIfExists(failed);
-            if (Files.exists(target)) {
-                Files.move(target, failed, StandardCopyOption.REPLACE_EXISTING);
+
+            if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+                try {
+                    Files.move(target, failed, StandardCopyOption.REPLACE_EXISTING);
+                } catch (Exception quarantineFailure) {
+                    installFailure.addSuppressed(quarantineFailure);
+                }
             }
-            if (Files.exists(backup)) {
-                Files.move(backup, target, StandardCopyOption.REPLACE_EXISTING);
+
+            Files.copy(backup, target, StandardCopyOption.REPLACE_EXISTING);
+            if (!sha256(target).equals(backupHash)) {
+                throw new IOException("Restored backup failed SHA-256 verification.");
             }
-            throw installFailure;
+            System.err.println("[ArenaSystem Updater] Original JAR restored from backup.");
+        } catch (Exception restoreFailure) {
+            installFailure.addSuppressed(restoreFailure);
+            System.err.println("[ArenaSystem Updater] Rollback failed; backup retained at: " + backup);
         }
     }
 
@@ -101,23 +146,71 @@ public final class UpdaterMain {
         if (!staged.getFileName().toString().equalsIgnoreCase(EXPECTED_JAR + ".pending")) {
             throw new IllegalArgumentException("Unexpected staged filename.");
         }
+        Path lockFile = targetParent.resolve(UPDATE_LOCK_FILE);
+        if (Files.isSymbolicLink(targetParent)
+                || Files.isSymbolicLink(target)
+                || Files.isSymbolicLink(staged)
+                || Files.isSymbolicLink(lockFile)) {
+            throw new IllegalArgumentException("Symbolic-link paths are not allowed.");
+        }
+        if (!Files.isDirectory(targetParent, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalArgumentException("Mods directory does not exist or is not a real directory.");
+        }
+        if (!Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalArgumentException("Target JAR must already exist as a regular file.");
+        }
 
         Path modsDirectory = targetParent.toRealPath();
         if (!modsDirectory.getFileName().toString().equalsIgnoreCase("mods")) {
             throw new IllegalArgumentException("Target must be inside a Minecraft mods directory.");
         }
-        if (Files.isSymbolicLink(target) || Files.isSymbolicLink(staged)) {
-            throw new IllegalArgumentException("Symbolic-link targets are not allowed.");
+    }
+
+    private static FileLock waitForUpdateLock(FileChannel channel)
+            throws IOException, InterruptedException {
+        long timeoutMillis = Long.getLong(WAIT_TIMEOUT_PROPERTY, DEFAULT_WAIT_TIMEOUT_MILLIS);
+        if (timeoutMillis <= 0 || timeoutMillis > 900_000L) {
+            throw new IllegalArgumentException("Invalid updater lock timeout.");
+        }
+
+        long timeoutNanos = java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        long deadline = System.nanoTime() + timeoutNanos;
+        while (true) {
+            try {
+                FileLock lock = channel.tryLock();
+                if (lock != null) return lock;
+            } catch (OverlappingFileLockException ignored) {
+                // Another updater in this JVM already owns the lock.
+            }
+
+            long remainingNanos = deadline - System.nanoTime();
+            if (remainingNanos <= 0) {
+                throw new IllegalStateException("Timed out waiting for another updater instance.");
+            }
+            long sleepNanos = Math.min(
+                    remainingNanos,
+                    java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(POLL_INTERVAL_MILLIS));
+            java.util.concurrent.TimeUnit.NANOSECONDS.sleep(sleepNanos);
         }
     }
 
     private static void waitForProcessExit(long pid) throws InterruptedException {
-        long deadline = System.currentTimeMillis() + WAIT_TIMEOUT_MILLIS;
+        long timeoutMillis = Long.getLong(WAIT_TIMEOUT_PROPERTY, DEFAULT_WAIT_TIMEOUT_MILLIS);
+        if (timeoutMillis <= 0 || timeoutMillis > 900_000L) {
+            throw new IllegalArgumentException("Invalid updater process wait timeout.");
+        }
+
+        long timeoutNanos = java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        long deadline = System.nanoTime() + timeoutNanos;
         while (ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false)) {
-            if (System.currentTimeMillis() >= deadline) {
+            long remainingNanos = deadline - System.nanoTime();
+            if (remainingNanos <= 0) {
                 throw new IllegalStateException("Timed out waiting for Minecraft to close.");
             }
-            Thread.sleep(POLL_INTERVAL_MILLIS);
+            long sleepNanos = Math.min(
+                    remainingNanos,
+                    java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(POLL_INTERVAL_MILLIS));
+            java.util.concurrent.TimeUnit.NANOSECONDS.sleep(sleepNanos);
         }
     }
 

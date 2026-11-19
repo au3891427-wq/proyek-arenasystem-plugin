@@ -8,10 +8,11 @@ Arguments:
 
 `<minecraft-pid> <target-jar> <staged-jar> <expected-sha256>`
 
-- Waits up to 180 seconds for the Minecraft process to exit.
+- Waits up to 180 seconds for the Minecraft process to exit and then acquires the shared updater file lock.
 - Only replaces `arenasystem-assassin-dagger-client.jar`.
 - Requires target and staged JAR to be in the same directory named `mods`.
 - Requires staged filename `arenasystem-assassin-dagger-client.jar.pending`.
+- Uses the same `.arenasystem-assassin-dagger-update.lock` file as the client to serialize separate game instances.
 - Verifies SHA-256 before and after installation.
 - Keeps a `.backup` file and restores it if installation fails.
 - Does not download files, execute scripts, or accept URLs.
@@ -23,7 +24,7 @@ the game directory's `.arenasystem/updater` folder and launch it with
 
 ## Build
 
-Requires JDK 25 and Gradle 8.14 or newer.
+Requires JDK 25 and Gradle 9.8.0 in CI.
 
 ```powershell
 gradle clean build
@@ -31,5 +32,7 @@ gradle clean build
 
 The runnable JAR is written to `build/libs/assassin-dagger-updater-0.1.0.jar`.
 
-This helper is source code only until it is integrated into the Fabric mod's
-download/staging lifecycle and exercised on Windows.
+The Windows CI workflow builds this helper and exercises installation, checksum rejection,
+missing-stage handling, process timeout, locked backup, rollback after a locked staged-file move,
+and serialization when two updater processes contend for the shared file lock. An end-to-end test
+with an actual Minecraft shutdown hook is still required.
