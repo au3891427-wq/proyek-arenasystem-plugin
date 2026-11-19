@@ -35,7 +35,7 @@ final class UpdateService {
     private static final String RELEASE_PATH_PREFIX =
             "/au3891427-wq/proyek-arenasystem-plugin/releases/download/";
     private static final URI MANIFEST_URI = URI.create(
-            "https://github.com/au3891427-wq/proyek-arenasystem-plugin/releases/latest/download/update-manifest.json");
+            "https://raw.githubusercontent.com/au3891427-wq/proyek-arenasystem-plugin/main/assassin-client-update-manifest.json");
     private static final String RELEASE_DOWNLOAD_PREFIX =
             "https://github.com/au3891427-wq/proyek-arenasystem-plugin/releases/download/";
     private static final String UPDATE_LOCK_FILE = ".arenasystem-assassin-dagger-update.lock";
@@ -313,6 +313,7 @@ final class UpdateService {
         String host = uri.getHost();
         boolean allowedHost = host != null && (
                 host.equalsIgnoreCase("github.com")
+                        || host.equalsIgnoreCase("raw.githubusercontent.com")
                         || host.equalsIgnoreCase("release-assets.githubusercontent.com")
                         || host.equalsIgnoreCase("objects.githubusercontent.com"));
         if (!"https".equalsIgnoreCase(uri.getScheme()) || !allowedHost) {
