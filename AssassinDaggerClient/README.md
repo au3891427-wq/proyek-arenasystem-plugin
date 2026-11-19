@@ -25,11 +25,31 @@ gradle --no-daemon clean build
 
 Output: `build/libs/arenasystem-assassin-dagger-client.jar`.
 
-## Release
+## Automatic stable releases and updates
 
-Push a tag such as `assassin-client-v0.1.0`. GitHub Actions builds both the client mod and
-Windows helper, calculates SHA-256 hashes, creates `update-manifest.json`, and publishes
-all three release assets. Only stable releases are checked by the client.
+The client checks GitHub Releases in the background every time Minecraft starts. When a newer
+compatible stable version is found, it downloads the client JAR and Windows helper, verifies
+their SHA-256 hashes, and stages the update. On Windows, the helper installs the JAR after
+Minecraft fully exits and keeps a verified backup for rollback.
+
+Stable release publication is automated:
+
+- A push to `main` that changes `AssassinDaggerClient/**`, `AssassinDaggerUpdater/**`, or
+  this release workflow builds and validates the client and helper.
+- The release version comes from `mod_version` in `AssassinDaggerClient/gradle.properties`.
+- If `assassin-client-v<version>` does not already exist, GitHub Actions creates the stable
+  release, uploads the client JAR, updater helper, and generated `update-manifest.json`.
+- A version that already has a release is never overwritten. Bump `mod_version` for each
+  new client release.
+- Pushing a tag such as `assassin-client-v0.1.1` also publishes that exact version.
+- Pull requests and manual workflow runs default to dry-run and cannot publish accidentally.
+
+Only stable releases are checked by the client. The existing `plugin` release is a prerelease,
+so it is not selected as the Assassin client update.
+
+**Scope:** this updater replaces only the Fabric client JAR on Windows, when Minecraft exits.
+It does not update the Paper server plugin. Other operating systems download and verify an update
+but require the player to install the staged JAR manually.
 
 The manifest must include:
 
