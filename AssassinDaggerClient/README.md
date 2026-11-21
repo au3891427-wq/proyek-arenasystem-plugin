@@ -1,10 +1,21 @@
-# Assassin Dagger Client
+# ArenaSystem Assassin Dagger Client
 
-Fabric client-side module for ArenaSystem, targeting Minecraft 26.3 and Java 25.
+Fabric client-side companion for ArenaSystem, targeting Minecraft 26.3 and Java 25.
+
+## Companion handshake
+
+The client registers the custom payload channel `arenasystem:mod_handshake` during client initialization.
+
+When an ArenaSystem Paper server sends a 16-byte UUID challenge, the mod replies with:
+- protocol version: integer `1`
+- the exact UUID nonce received from the server
+
+The response is 20 bytes total. The server must validate both the protocol version and nonce before accepting the player. The client does not claim that a handshake is cryptographic authentication; the server remains authoritative for gameplay.
 
 ## Current scope
 
 - Fabric client entrypoint.
+- ArenaSystem protocol-v1 server handshake.
 - Stable-channel update manifest check at startup.
 - HTTPS-only GitHub release downloads.
 - SHA-256 verification and bounded download sizes.
@@ -12,8 +23,14 @@ Fabric client-side module for ArenaSystem, targeting Minecraft 26.3 and Java 25.
 - Windows shutdown helper handoff; the helper waits for Minecraft to exit before replacing the JAR.
 - Backup and rollback behavior in the standalone helper.
 
-The client mod currently contains the updater foundation only. Dagger rendering, animations,
-input handling, and Paper plugin networking are not implemented in this module yet.
+Dagger rendering, animations, and input handling are not implemented in this module yet.
+
+## Requirements
+
+- Minecraft 26.3
+- Fabric Loader 0.20.1 or newer
+- Fabric API 0.166.0+26.3 or newer
+- Java 25 or newer
 
 ## Build
 
@@ -23,7 +40,18 @@ Requires JDK 25 and Gradle 9.8.0.
 gradle --no-daemon clean build
 ```
 
-Output: `build/libs/arenasystem-assassin-dagger-client.jar`.
+Output: `build/libs/arenaSystem_client-0.1.1.jar`.
+
+## One-time filename migration
+
+The original 0.1.0 client used the fixed filename `arenasystem-assassin-dagger-client.jar` and cannot safely migrate itself to the versioned naming scheme. Install the first versioned client (0.1.1) manually once:
+
+1. Close Minecraft.
+2. Remove `arenasystem-assassin-dagger-client.jar` from `.minecraft/mods`.
+3. Install `arenaSystem_client-0.1.1.jar` in `.minecraft/mods`.
+4. Start Minecraft and confirm Fabric reports ArenaSystem Assassin Dagger 0.1.1.
+
+Future updates use the version-aware updater/helper.
 
 ## Automatic stable releases and updates
 
@@ -55,7 +83,6 @@ It does not update the Paper server plugin. Other operating systems download and
 but require the player to install the staged JAR manually.
 
 The manifest must include:
-
 - `schemaVersion`
 - `modId`
 - `version`
@@ -78,21 +105,19 @@ tag-triggered publish job.
 
 1. Client checks the latest stable release in the background.
 2. It verifies mod ID, loader, exact Minecraft version, HTTPS GitHub URL, and SHA-256.
-3. It downloads the mod JAR to `mods/arenasystem-assassin-dagger-client.jar.pending`.
+3. It downloads the mod JAR to `mods/arenaSystem_client-<new-version>.jar.pending`.
 4. It downloads and verifies the matching helper from the same release tag into `.arenasystem/updater/`.
-5. A file lock in `mods/` prevents separate Minecraft instances from staging overlapping updates.
+5. The installed JAR is located by its active mod version (`arenaSystem_client-<installed-version>.jar`). A file lock in `mods/` prevents overlapping updates.
 6. During JVM shutdown, it starts the helper with the current Minecraft PID, using `javaw.exe`
    or the `java.exe` fallback from the active Java runtime.
 7. The helper waits for Minecraft to exit and for the update lock to become available, backs up
-   the current JAR, installs the staged JAR, verifies the installed hash, and restores the backup
-   if installation fails.
+   the current JAR, installs the new versioned filename, verifies its hash, and removes the old
+   active filename only after verification. If installation fails, it restores the backup.
 
 The updater does not install Paper plugin JARs and does not execute content from the manifest.
 
-## Limitations before production
+## Limitations
 
-- First release must be published before automatic updates can work.
-- The mod JAR filename must remain exactly `arenasystem-assassin-dagger-client.jar`.
 - Automatic replacement is currently Windows-only. Other operating systems retain the verified
   staged update without replacing the active JAR.
 - SHA-256 protects against accidental corruption and mismatched assets. It does not provide

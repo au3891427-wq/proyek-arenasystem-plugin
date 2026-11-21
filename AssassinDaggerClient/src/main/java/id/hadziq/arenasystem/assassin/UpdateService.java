@@ -30,7 +30,7 @@ import java.util.Optional;
 
 final class UpdateService {
     private static final String MOD_ID = "arenasystem_assassin_dagger";
-    private static final String MOD_JAR = "arenasystem-assassin-dagger-client.jar";
+    private static final String MOD_JAR_PREFIX = "arenaSystem_client-";
     private static final String HELPER_JAR = "assassin-dagger-updater-0.1.0.jar";
     private static final String RELEASE_PATH_PREFIX =
             "/au3891427-wq/proyek-arenasystem-plugin/releases/download/";
@@ -88,11 +88,11 @@ final class UpdateService {
 
         Path target = localMod.get().getOrigin().getPaths().stream()
                 .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
-                .filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".jar"))
+                .filter(path -> path.getFileName().toString().equalsIgnoreCase(clientJarName(localVersion)))
                 .findFirst()
                 .orElseThrow(() -> new IOException("Could not locate installed mod JAR."))
                 .toAbsolutePath().normalize();
-        if (!MOD_JAR.equalsIgnoreCase(target.getFileName().toString())) {
+        if (!clientJarName(localVersion).equalsIgnoreCase(target.getFileName().toString())) {
             throw new IOException("Unexpected installed mod filename: " + target.getFileName());
         }
         Path modsDirectory = target.getParent();
@@ -108,12 +108,12 @@ final class UpdateService {
         }
 
         boolean shutdownHookRegistered = false;
-        Path staged = modsDirectory.resolve(MOD_JAR + ".pending");
+        Path staged = modsDirectory.resolve(clientJarName(remoteVersion) + ".pending");
         boolean modStaged = false;
         try {
             URI downloadUri = validateReleaseAssetUrl(
                     requiredString(manifest, "downloadUrl"),
-                    MOD_JAR,
+                    clientJarName(remoteVersion),
                     "assassin-client-v" + remoteVersion);
             String expectedHash = requiredString(manifest, "sha256").toLowerCase(Locale.ROOT);
             if (!expectedHash.matches("[a-f0-9]{64}")) {
@@ -260,7 +260,7 @@ final class UpdateService {
         parseStableVersion(version, "manifest version");
         parseStableVersion(requiredString(manifest, "loaderVersion"), "manifest loader version");
         validateReleaseAssetUrl(
-                requiredString(manifest, "downloadUrl"), MOD_JAR, "assassin-client-v" + version);
+                requiredString(manifest, "downloadUrl"), clientJarName(version), "assassin-client-v" + version);
         String modHash = requiredString(manifest, "sha256");
         String helperHash = requiredString(manifest, "helperSha256");
         if (!modHash.matches("(?i)[a-f0-9]{64}") || !helperHash.matches("(?i)[a-f0-9]{64}")) {
@@ -277,6 +277,10 @@ final class UpdateService {
         String value = object.get(key).getAsString();
         if (value.isBlank()) throw new IOException("Manifest field is blank: " + key);
         return value;
+    }
+
+    private static String clientJarName(String version) {
+        return MOD_JAR_PREFIX + version + ".jar";
     }
 
     private static URI validateReleaseAssetUrl(

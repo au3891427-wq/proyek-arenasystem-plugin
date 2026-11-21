@@ -20,7 +20,7 @@ on:
       version:
         description: "Semantic version to build for a dry run (for example 0.1.0)"
         required: true
-        default: "0.1.0"
+        default: "0.1.1"
         type: string
       dry_run:
         description: "Dry-run when true; production publishing runs from main when false"
@@ -158,7 +158,7 @@ jobs:
               $properties[$matches[1].Trim()] = $matches[2].Trim()
             }
           }
-          foreach ($requiredProperty in @("minecraft_version", "loader_version")) {
+          foreach ($requiredProperty in @("minecraft_version", "loader_version", "fabric_api_version")) {
             if (-not $properties.ContainsKey($requiredProperty)) {
               throw "Missing $requiredProperty in $propertiesPath."
             }
@@ -166,11 +166,12 @@ jobs:
 
           $minecraftVersion = $properties["minecraft_version"]
           $loaderVersion = $properties["loader_version"]
+          $fabricApiVersion = $properties["fabric_api_version"]
           if ($env:EVENT_NAME -eq "workflow_dispatch" -and $env:DRY_RUN -ne "true" -and
               $properties["mod_version"] -ne $version) {
             throw "Manual release version must match AssassinDaggerClient/gradle.properties mod_version."
           }
-          $clientPath = "AssassinDaggerClient/build/libs/arenasystem-assassin-dagger-client.jar"
+          $clientPath = "AssassinDaggerClient/build/libs/arenaSystem_client-$version.jar"
           $helperPath = "AssassinDaggerUpdater/build/libs/assassin-dagger-updater-0.1.0.jar"
           if (-not (Test-Path $clientPath -PathType Leaf)) { throw "Client JAR is missing: $clientPath" }
           if (-not (Test-Path $helperPath -PathType Leaf)) { throw "Updater JAR is missing: $helperPath" }
@@ -201,6 +202,7 @@ jobs:
               $modMetadata.version -ne $version -or
               $modMetadata.depends.minecraft -ne $expectedMinecraftDependency -or
               $modMetadata.depends.fabricloader -ne $expectedLoaderDependency -or
+              $modMetadata.depends."fabric-api" -ne ">=$fabricApiVersion" -or
               $modMetadata.depends.java -ne ">=25") {
             throw "Built JAR metadata does not match the intended release configuration."
           }
