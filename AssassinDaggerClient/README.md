@@ -5,6 +5,8 @@ Fabric client-side module for ArenaSystem, targeting Minecraft 26.3 and Java 25.
 ## Current scope
 
 - Fabric client entrypoint.
+- Challenge-response presence handshake with the ArenaSystem Paper plugin on
+  `arenasystem:mod_handshake` (protocol 1).
 - Stable-channel update manifest check at startup.
 - HTTPS-only GitHub release downloads.
 - SHA-256 verification and bounded download sizes.
@@ -12,12 +14,15 @@ Fabric client-side module for ArenaSystem, targeting Minecraft 26.3 and Java 25.
 - Windows shutdown helper handoff; the helper waits for Minecraft to exit before replacing the JAR.
 - Backup and rollback behavior in the standalone helper.
 
-The client mod currently contains the updater foundation only. Dagger rendering, animations,
-input handling, and Paper plugin networking are not implemented in this module yet.
+The handshake verifies that this companion client mod is active and understands the
+server's protocol. It is a compatibility/presence check, not cryptographic attestation:
+a modified client could imitate the response. Dagger rendering, animations, and input
+handling remain outside the current implementation.
 
 ## Build
 
-Requires JDK 25 and Gradle 9.8.0.
+Requires JDK 25, Gradle 9.8.0, Fabric Loader 0.20.1, and Fabric API
+`0.166.0+26.3`.
 
 ```powershell
 gradle --no-daemon clean build
