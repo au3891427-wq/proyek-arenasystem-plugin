@@ -31,6 +31,9 @@ attestation: a modified client could imitate the response.
 Requires JDK 25, Gradle 9.8.0, Fabric Loader 0.20.1, and Fabric API
 `0.166.0+26.3`.
 
+Minecraft 26.3 uses the non-remapping Fabric Loom plugin, so Fabric dependencies
+are declared with Gradle's standard `implementation` configuration.
+
 ```powershell
 gradle --no-daemon clean build
 ```
