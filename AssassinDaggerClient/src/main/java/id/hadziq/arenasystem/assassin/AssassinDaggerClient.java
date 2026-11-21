@@ -16,6 +16,8 @@ public final class AssassinDaggerClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        ArenaSystemHandshake.initialize();
+
         CompletableFuture.runAsync(() -> {
             try {
                 UpdateService.checkAndStage(FabricLoader.getInstance());
