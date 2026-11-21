@@ -3,11 +3,12 @@
   "id": "arenasystem_assassin_dagger",
   "version": "${version}",
   "name": "ArenaSystem Assassin Dagger",
-  "description": "Client-side visuals and secure update delivery for the ArenaSystem Assassin Dagger.",
+  "description": "ArenaSystem companion client with server handshake and secure update delivery.",
   "environment": "client",
   "entrypoints": { "client": ["id.hadziq.arenasystem.assassin.AssassinDaggerClient"] },
   "depends": {
     "fabricloader": ">=${loader_version}",
+    "fabric-api": ">=${fabric_api_version}",
     "minecraft": "=${minecraft_version}",
     "java": ">=25"
   }
