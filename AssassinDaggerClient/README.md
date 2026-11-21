@@ -40,7 +40,18 @@ Requires JDK 25 and Gradle 9.8.0.
 gradle --no-daemon clean build
 ```
 
-Output: `build/libs/arenasystem-assassin-dagger-client.jar`.
+Output: `build/libs/arenaSystem_client-0.1.1.jar`.
+
+## One-time filename migration
+
+The original 0.1.0 client used the fixed filename `arenasystem-assassin-dagger-client.jar` and cannot safely migrate itself to the versioned naming scheme. Install the first versioned client (0.1.1) manually once:
+
+1. Close Minecraft.
+2. Remove `arenasystem-assassin-dagger-client.jar` from `.minecraft/mods`.
+3. Install `arenaSystem_client-0.1.1.jar` in `.minecraft/mods`.
+4. Start Minecraft and confirm Fabric reports ArenaSystem Assassin Dagger 0.1.1.
+
+Future updates use the version-aware updater/helper.
 
 ## Automatic stable releases and updates
 
@@ -94,14 +105,14 @@ tag-triggered publish job.
 
 1. Client checks the latest stable release in the background.
 2. It verifies mod ID, loader, exact Minecraft version, HTTPS GitHub URL, and SHA-256.
-3. It downloads the mod JAR to `mods/arenasystem-assassin-dagger-client.jar.pending`.
+3. It downloads the mod JAR to `mods/arenaSystem_client-<new-version>.jar.pending`.
 4. It downloads and verifies the matching helper from the same release tag into `.arenasystem/updater/`.
-5. A file lock in `mods/` prevents separate Minecraft instances from staging overlapping updates.
+5. The installed JAR is located by its active mod version (`arenaSystem_client-<installed-version>.jar`). A file lock in `mods/` prevents overlapping updates.
 6. During JVM shutdown, it starts the helper with the current Minecraft PID, using `javaw.exe`
    or the `java.exe` fallback from the active Java runtime.
 7. The helper waits for Minecraft to exit and for the update lock to become available, backs up
-   the current JAR, installs the staged JAR, verifies the installed hash, and restores the backup
-   if installation fails.
+   the current JAR, installs the new versioned filename, verifies its hash, and removes the old
+   active filename only after verification. If installation fails, it restores the backup.
 
 The updater does not install Paper plugin JARs and does not execute content from the manifest.
 
