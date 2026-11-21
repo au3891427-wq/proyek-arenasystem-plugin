@@ -460,8 +460,12 @@ final class ArenaSystemHandshake {
 
         private static final StreamCodec<RegistryFriendlyByteBuf, HandshakePayload> CODEC =
                 StreamCodec.of(
-                        (buffer, payload) -> buffer.writeByteArray(payload.data),
-                        buffer -> new HandshakePayload(buffer.readByteArray(MAX_MESSAGE_BYTES))
+                        (buffer, payload) -> buffer.writeBytes(payload.data),
+                        buffer -> {
+                            byte[] data = new byte[buffer.readableBytes()];
+                            buffer.readBytes(data);
+                            return new HandshakePayload(data);
+                        }
                 );
 
         private HandshakePayload {
