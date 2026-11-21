@@ -14,10 +14,16 @@ Fabric client-side module for ArenaSystem, targeting Minecraft 26.3 and Java 25.
 - Windows shutdown helper handoff; the helper waits for Minecraft to exit before replacing the JAR.
 - Backup and rollback behavior in the standalone helper.
 
-The handshake verifies that this companion client mod is active and understands the
-server's protocol. It is a compatibility/presence check, not cryptographic attestation:
-a modified client could imitate the response. Dagger rendering, animations, and input
-handling remain outside the current implementation.
+The mod bundles the client item definition and pixel-art texture for the server item
+model `arenasystem:assassin_dagger`. When the Paper plugin assigns that item model to
+the Assassin's Twin Blade, Minecraft loads the appearance directly from this mod; the
+base dagger model does not require an external server resource pack.
+
+The Paper plugin remains authoritative for attacks, range, cooldowns, and damage.
+Right-click input and the off-hand swing animation continue through Minecraft's normal
+interaction and swing packets; the client mod supplies the dagger's local appearance.
+The handshake verifies mod presence and protocol compatibility, not cryptographic
+attestation: a modified client could imitate the response.
 
 ## Build
 
