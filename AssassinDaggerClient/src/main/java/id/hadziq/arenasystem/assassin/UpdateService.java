@@ -25,12 +25,13 @@ import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
 final class UpdateService {
     private static final String MOD_ID = "arenasystem_assassin_dagger";
-    private static final String MOD_JAR = "arenasystem-assassin-dagger-client.jar";
+    private static final String RELEASE_MOD_ASSET = "arenasystem-assassin-dagger-client.jar";
     private static final String HELPER_JAR = "assassin-dagger-updater-0.1.0.jar";
     private static final String RELEASE_PATH_PREFIX =
             "/au3891427-wq/proyek-arenasystem-plugin/releases/download/";
@@ -86,21 +87,10 @@ final class UpdateService {
 
         if (compareVersions(remoteParts, localParts) <= 0) return;
 
-        Path target = localMod.get().getOrigin().getPaths().stream()
-                .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
-                .filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".jar"))
-                .findFirst()
-                .orElseThrow(() -> new IOException("Could not locate installed mod JAR."))
-                .toAbsolutePath().normalize();
-        if (!MOD_JAR.equalsIgnoreCase(target.getFileName().toString())) {
-            throw new IOException("Unexpected installed mod filename: " + target.getFileName());
-        }
+        Path target = locateInstalledModJar(localMod.get());
         Path modsDirectory = target.getParent();
-        if (modsDirectory == null
-                || !"mods".equalsIgnoreCase(modsDirectory.getFileName().toString())
-                || Files.isSymbolicLink(modsDirectory)) {
-            throw new IOException("Mod must be installed directly inside a real mods directory.");
-        }
+        System.out.println("[ArenaSystem] Found installed mod JAR by Fabric ID "
+                + MOD_ID + ": " + target.getFileName());
 
         if (!acquireUpdateLock(modsDirectory)) {
             System.out.println("[ArenaSystem] Another Assassin Dagger update is already in progress; skipping this check.");
@@ -108,12 +98,12 @@ final class UpdateService {
         }
 
         boolean shutdownHookRegistered = false;
-        Path staged = modsDirectory.resolve(MOD_JAR + ".pending");
+        Path staged = target.resolveSibling(target.getFileName().toString() + ".pending");
         boolean modStaged = false;
         try {
             URI downloadUri = validateReleaseAssetUrl(
                     requiredString(manifest, "downloadUrl"),
-                    MOD_JAR,
+                    RELEASE_MOD_ASSET,
                     "assassin-client-v" + remoteVersion);
             String expectedHash = requiredString(manifest, "sha256").toLowerCase(Locale.ROOT);
             if (!expectedHash.matches("[a-f0-9]{64}")) {
@@ -144,6 +134,31 @@ final class UpdateService {
                 releaseUpdateLock();
             }
         }
+    }
+
+    private static Path locateInstalledModJar(ModContainer mod) throws IOException {
+        List<Path> candidates = mod.getOrigin().getPaths().stream()
+                .map(path -> path.toAbsolutePath().normalize())
+                .filter(path -> path.getFileName() != null)
+                .filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".jar"))
+                .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                .distinct()
+                .toList();
+
+        if (candidates.size() != 1) {
+            throw new IOException("Expected exactly one JAR for Fabric mod ID "
+                    + MOD_ID + ", found " + candidates.size() + ".");
+        }
+
+        Path target = candidates.get(0);
+        Path modsDirectory = target.getParent();
+        if (modsDirectory == null
+                || modsDirectory.getFileName() == null
+                || !"mods".equalsIgnoreCase(modsDirectory.getFileName().toString())
+                || Files.isSymbolicLink(modsDirectory)) {
+            throw new IOException("The installed mod JAR must be directly inside a real mods directory.");
+        }
+        return target;
     }
 
     private static synchronized boolean acquireUpdateLock(Path modsDirectory) throws IOException {
@@ -260,7 +275,7 @@ final class UpdateService {
         parseStableVersion(version, "manifest version");
         parseStableVersion(requiredString(manifest, "loaderVersion"), "manifest loader version");
         validateReleaseAssetUrl(
-                requiredString(manifest, "downloadUrl"), MOD_JAR, "assassin-client-v" + version);
+                requiredString(manifest, "downloadUrl"), RELEASE_MOD_ASSET, "assassin-client-v" + version);
         String modHash = requiredString(manifest, "sha256");
         String helperHash = requiredString(manifest, "helperSha256");
         if (!modHash.matches("(?i)[a-f0-9]{64}") || !helperHash.matches("(?i)[a-f0-9]{64}")) {

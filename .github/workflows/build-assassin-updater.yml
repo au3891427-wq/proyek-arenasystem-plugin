@@ -36,7 +36,7 @@ jobs:
           $helper = (Resolve-Path "AssassinDaggerUpdater/build/libs/assassin-dagger-updater-0.1.0.jar").Path
           $testRoot = Join-Path $env:RUNNER_TEMP ("arenasystem-updater-test-" + [guid]::NewGuid().ToString("N"))
           $mods = Join-Path $testRoot "mods"
-          $target = Join-Path $mods "arenasystem-assassin-dagger-client.jar"
+          $target = Join-Path $mods "arenaSystem_client-0.1.1.jar"
           $staged = "$target.pending"
           $backup = "$target.backup"
           $failed = "$target.failed"
@@ -99,14 +99,14 @@ jobs:
               throw "Missing staged JAR changed the active JAR."
             }
 
-            # 4. An unexpected target filename must be rejected before any replacement.
-            $wrongTarget = Join-Path $mods "another-mod.jar"
+            # 4. A non-JAR target must be rejected before any replacement.
+            $wrongTarget = Join-Path $mods "not-a-client-mod.txt"
             $wrongStaged = "$wrongTarget.pending"
             [System.IO.File]::WriteAllText($wrongTarget, "do-not-touch")
             [System.IO.File]::WriteAllText($wrongStaged, "invalid-target-update")
             $wrongHash = (Get-FileHash $wrongStaged -Algorithm SHA256).Hash.ToLowerInvariant()
             $exitCode = Invoke-Updater @("2147483647", $wrongTarget, $wrongStaged, $wrongHash)
-            Assert-NonZeroExit $exitCode "unexpected target filename"
+            Assert-NonZeroExit $exitCode "non-JAR target extension"
             if ([System.IO.File]::ReadAllText($wrongTarget) -ne "do-not-touch") {
               throw "Unexpected target file was modified."
             }

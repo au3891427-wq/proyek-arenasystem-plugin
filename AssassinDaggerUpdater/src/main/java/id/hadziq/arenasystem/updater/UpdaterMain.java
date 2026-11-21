@@ -18,13 +18,12 @@ import java.util.HexFormat;
  *
  * The client mod launches this helper during JVM shutdown. This process waits
  * for the Minecraft PID, verifies the staged file, then replaces only the
- * expected mod JAR.
+ * JAR path supplied by the Fabric-aware client mod.
  */
 public final class UpdaterMain {
     private static final long DEFAULT_WAIT_TIMEOUT_MILLIS = 180_000L;
     private static final long POLL_INTERVAL_MILLIS = 500L;
     private static final String WAIT_TIMEOUT_PROPERTY = "arenasystem.updater.waitTimeoutMillis";
-    private static final String EXPECTED_JAR = "arenasystem-assassin-dagger-client.jar";
     private static final String UPDATE_LOCK_FILE = ".arenasystem-assassin-dagger-update.lock";
 
     private UpdaterMain() {
@@ -140,11 +139,12 @@ public final class UpdaterMain {
                 || !targetParent.equals(stagedParent)) {
             throw new IllegalArgumentException("Target and staged JAR must share one directory.");
         }
-        if (!EXPECTED_JAR.equalsIgnoreCase(target.getFileName().toString())) {
-            throw new IllegalArgumentException("Refusing to replace an unexpected JAR filename.");
+        String targetName = target.getFileName().toString();
+        if (!targetName.toLowerCase(java.util.Locale.ROOT).endsWith(".jar")) {
+            throw new IllegalArgumentException("Target must be a JAR file.");
         }
-        if (!staged.getFileName().toString().equalsIgnoreCase(EXPECTED_JAR + ".pending")) {
-            throw new IllegalArgumentException("Unexpected staged filename.");
+        if (!staged.getFileName().toString().equalsIgnoreCase(targetName + ".pending")) {
+            throw new IllegalArgumentException("Staged filename must match the detected target JAR.");
         }
         Path lockFile = targetParent.resolve(UPDATE_LOCK_FILE);
         if (Files.isSymbolicLink(targetParent)
