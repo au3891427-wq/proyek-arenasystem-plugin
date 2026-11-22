@@ -99,19 +99,28 @@ jobs:
               throw "Missing staged JAR changed the active JAR."
             }
 
-            # 4. An unexpected target filename must be rejected before any replacement.
-            $wrongTarget = Join-Path $mods "another-mod.jar"
-            $wrongStaged = "$wrongTarget.pending"
-            [System.IO.File]::WriteAllText($wrongTarget, "do-not-touch")
-            [System.IO.File]::WriteAllText($wrongStaged, "invalid-target-update")
-            $wrongHash = (Get-FileHash $wrongStaged -Algorithm SHA256).Hash.ToLowerInvariant()
-            $exitCode = Invoke-Updater @("2147483647", $wrongTarget, $wrongStaged, $wrongHash)
-            Assert-NonZeroExit $exitCode "unexpected target filename"
-            if ([System.IO.File]::ReadAllText($wrongTarget) -ne "do-not-touch") {
-              throw "Unexpected target file was modified."
+            # 4. A versioned update must accept the actual installed JAR name,
+            #    install the new versioned filename, and remove the old JAR only
+            #    after the new file has been verified.
+            $oldVersioned = Join-Path $mods "custom-assassin-client-old.jar"
+            $newVersioned = Join-Path $mods "ArenaSystem_Client-0.1.1.jar"
+            $versionedStaged = "$newVersioned.pending"
+            $versionedBackup = "$oldVersioned.backup-ArenaSystem_Client-0.1.1"
+            [System.IO.File]::WriteAllText($oldVersioned, "old-client-version")
+            [System.IO.File]::WriteAllText($versionedStaged, "new-versioned-client")
+            $versionedHash = (Get-FileHash $versionedStaged -Algorithm SHA256).Hash.ToLowerInvariant()
+            $exitCode = Invoke-Updater @("2147483647", $oldVersioned, $versionedStaged, $versionedHash)
+            if ($exitCode -ne 0) { throw "Versioned installation failed (exit $exitCode)." }
+            if (Test-Path $oldVersioned) { throw "Updater left the old JAR active beside the new JAR." }
+            if ([System.IO.File]::ReadAllText($newVersioned) -ne "new-versioned-client") {
+              throw "Updater did not install the versioned JAR."
             }
+            if ([System.IO.File]::ReadAllText($versionedBackup) -ne "old-client-version") {
+              throw "Updater did not preserve the previous versioned JAR as a backup."
+            }
+            if (Test-Path $versionedStaged) { throw "Updater did not consume the versioned staged JAR." }
             if ([System.IO.File]::ReadAllText($target) -ne "verified-client-update") {
-              throw "Unexpected target attempt modified the real client JAR."
+              throw "Versioned update modified an unrelated JAR."
             }
 
             # 5. The helper must time out while this PowerShell process remains alive.
