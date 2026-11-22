@@ -1,6 +1,7 @@
 package id.hadziq.arenasystem.client;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -20,6 +21,8 @@ final class CompanionHandshakeClient {
     }
 
     static void initialize() {
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, minecraft) -> clearCurrentSession());
+
         PayloadTypeRegistry.clientboundPlay().register(HandshakePayload.TYPE, HandshakePayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(HandshakePayload.TYPE, HandshakePayload.CODEC);
 
@@ -162,6 +165,10 @@ final class CompanionHandshakeClient {
         }
     }
 
+    private static synchronized void clearCurrentSession() {
+        clearSession(session);
+    }
+
     private static void clearSession(Session target) {
         if (target == null) {
             return;
@@ -222,7 +229,7 @@ final class CompanionHandshakeClient {
                         });
 
         private HandshakePayload {
-            if (data == null || data.length > CompanionHandshakeProtocol.MAX_MESSAGE_BYTES) {
+            if (data == null) {
                 throw new IllegalArgumentException("Invalid ArenaSystem handshake payload.");
             }
             data = data.clone();
