@@ -223,6 +223,10 @@ final class CompanionHandshakeClient {
                         (buffer, payload) -> buffer.writeBytes(payload.data),
                         buffer -> {
                             int length = buffer.readableBytes();
+                            if (length > CompanionHandshakeProtocol.MAX_MESSAGE_BYTES) {
+                                buffer.skipBytes(length);
+                                return new HandshakePayload(new byte[0]);
+                            }
                             byte[] bytes = new byte[length];
                             buffer.readBytes(bytes);
                             return new HandshakePayload(bytes);
