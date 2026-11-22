@@ -4,11 +4,11 @@ on:
   push:
     paths:
       - "ArenaSystemClient/**"
-      - ".github/workflows/build-assassin-client.yml"
+      - ".github/workflows/build-arenasystem-client.yml"
   pull_request:
     paths:
       - "ArenaSystemClient/**"
-      - ".github/workflows/build-assassin-client.yml"
+      - ".github/workflows/build-arenasystem-client.yml"
   workflow_dispatch:
 
 permissions:

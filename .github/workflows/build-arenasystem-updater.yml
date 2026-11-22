@@ -4,11 +4,11 @@ on:
   push:
     paths:
       - "ArenaSystemUpdater/**"
-      - ".github/workflows/build-assassin-updater.yml"
+      - ".github/workflows/build-arenasystem-updater.yml"
   pull_request:
     paths:
       - "ArenaSystemUpdater/**"
-      - ".github/workflows/build-assassin-updater.yml"
+      - ".github/workflows/build-arenasystem-updater.yml"
   workflow_dispatch:
 
 permissions:

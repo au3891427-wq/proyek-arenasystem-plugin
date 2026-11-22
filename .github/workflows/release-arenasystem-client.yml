@@ -9,12 +9,12 @@ on:
     paths:
       - "ArenaSystemClient/**"
       - "ArenaSystemUpdater/**"
-      - ".github/workflows/release-assassin-client.yml"
+      - ".github/workflows/release-arenasystem-client.yml"
   pull_request:
     paths:
       - "ArenaSystemClient/**"
       - "ArenaSystemUpdater/**"
-      - ".github/workflows/release-assassin-client.yml"
+      - ".github/workflows/release-arenasystem-client.yml"
   workflow_dispatch:
     inputs:
       version:
@@ -350,7 +350,7 @@ jobs:
           files: |
             release-assets/*
 
-      - name: Update the public Assassin client manifest
+      - name: Update public ArenaSystem client manifests
         shell: pwsh
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
@@ -401,7 +401,7 @@ jobs:
           }
 
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add $newManifestTarget $legacyManifestTarget
           git commit -m "Publish ArenaSystem Client $($newManifest.version) update manifests"
           git push origin HEAD:main
