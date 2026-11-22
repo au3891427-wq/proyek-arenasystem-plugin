@@ -170,7 +170,7 @@ jobs:
               $properties["mod_version"] -ne $version) {
             throw "Manual release version must match AssassinDaggerClient/gradle.properties mod_version."
           }
-          $clientPath = "AssassinDaggerClient/build/libs/arenasystem-assassin-dagger-client.jar"
+          $clientPath = "AssassinDaggerClient/build/libs/arenaSystem_client-$version.jar"
           $helperPath = "AssassinDaggerUpdater/build/libs/assassin-dagger-updater-0.1.0.jar"
           if (-not (Test-Path $clientPath -PathType Leaf)) { throw "Client JAR is missing: $clientPath" }
           if (-not (Test-Path $helperPath -PathType Leaf)) { throw "Updater JAR is missing: $helperPath" }

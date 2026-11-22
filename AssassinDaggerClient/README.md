@@ -6,7 +6,7 @@ Fabric client-side module for ArenaSystem, targeting Minecraft 26.3 and Java 25.
 
 - Fabric client entrypoint.
 - Challenge-response presence handshake with the ArenaSystem Paper plugin on
-  `arenasystem:mod_handshake` (protocol 1).
+  `arenasystem:mod_handshake` (protocol 2).
 - Stable-channel update manifest check at startup.
 - HTTPS-only GitHub release downloads.
 - SHA-256 verification and bounded download sizes.
@@ -14,15 +14,18 @@ Fabric client-side module for ArenaSystem, targeting Minecraft 26.3 and Java 25.
 - Windows shutdown helper handoff; the helper waits for Minecraft to exit before replacing the JAR.
 - Backup and rollback behavior in the standalone helper.
 
-The mod bundles the client item definition and four-frame animated pixel-art texture for the server item
-model `arenasystem:assassin_dagger`. When the Paper plugin assigns that item model to
-the Assassin's Twin Blade, Minecraft loads the appearance directly from this mod; the
-base dagger model does not require an external server resource pack. The cyan blade rune
-uses a subtle looping texture animation.
+A built-in, always-enabled resource pack is bundled under `resourcepacks/assassin_dagger/`.
+It contains the item definition, model, four-frame animated pixel-art texture, and keybind
+translations for the server item model `arenasystem:assassin_dagger`. No external resource-pack
+host is required for these client assets.
 
-The Paper plugin remains authoritative for attacks, range, cooldowns, and damage.
-Right-click input and the off-hand swing animation continue through Minecraft's normal
-interaction and swing packets; the client mod supplies the dagger's local appearance.
+The client also registers a configurable `Twin Blade: Off-hand Strike` key mapping (default
+`R`, editable in Options > Controls > Key Binds). It invokes the same main-hand use
+interaction already handled by the Paper plugin when both hands hold golden swords.
+
+The Paper plugin remains authoritative for Assassin class validation, target checks, range,
+damage, cooldowns, and the off-hand swing. Vanilla right-click remains supported; the custom
+keybind sends the same main-hand use interaction and does not implement a second attack system.
 The handshake verifies mod presence and protocol compatibility, not cryptographic
 attestation: a modified client could imitate the response.
 
@@ -38,7 +41,7 @@ are declared with Gradle's standard `implementation` configuration.
 gradle --no-daemon clean build
 ```
 
-Output: `build/libs/arenasystem-assassin-dagger-client.jar`.
+Output: `build/libs/arenaSystem_client-<version>.jar`.
 
 ## Automatic stable releases and updates
 
@@ -93,7 +96,7 @@ tag-triggered publish job.
 
 1. Client checks the latest stable release in the background.
 2. It verifies mod ID, loader, exact Minecraft version, HTTPS GitHub URL, and SHA-256.
-3. It downloads the mod JAR to `mods/arenasystem-assassin-dagger-client.jar.pending`.
+3. It downloads the versioned release asset to a `.pending` file beside the currently installed client JAR.
 4. It downloads and verifies the matching helper from the same release tag into `.arenasystem/updater/`.
 5. A file lock in `mods/` prevents separate Minecraft instances from staging overlapping updates.
 6. During JVM shutdown, it starts the helper with the current Minecraft PID, using `javaw.exe`
@@ -107,7 +110,7 @@ The updater does not install Paper plugin JARs and does not execute content from
 ## Limitations before production
 
 - First release must be published before automatic updates can work.
-- The mod JAR filename must remain exactly `arenasystem-assassin-dagger-client.jar`.
+- Release assets use the versioned name `arenaSystem_client-<version>.jar`; the updater detects the installed client JAR by Fabric mod ID and replaces it in place.
 - Automatic replacement is currently Windows-only. Other operating systems retain the verified
   staged update without replacing the active JAR.
 - SHA-256 protects against accidental corruption and mismatched assets. It does not provide

@@ -42,6 +42,5 @@ java {
 }
 
 tasks.named('jar') {
-    archiveFileName = 'arenasystem-assassin-dagger-client.jar'
     from("LICENSE") { rename { "${it}_${project.base.archivesName.get()}" } }
 }

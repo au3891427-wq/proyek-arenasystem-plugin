@@ -16,6 +16,8 @@ public final class AssassinDaggerClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        ArenaSystemResourcePack.register();
+        ArenaSystemKeyMappings.initialize();
         ArenaSystemHandshake.initialize();
 
         CompletableFuture.runAsync(() -> {

@@ -31,7 +31,7 @@ import java.util.Optional;
 
 final class UpdateService {
     private static final String MOD_ID = "arenasystem_assassin_dagger";
-    private static final String RELEASE_MOD_ASSET = "arenasystem-assassin-dagger-client.jar";
+    private static final String LEGACY_RELEASE_MOD_ASSET = "arenasystem-assassin-dagger-client.jar";
     private static final String HELPER_JAR = "assassin-dagger-updater-0.1.0.jar";
     private static final String RELEASE_PATH_PREFIX =
             "/au3891427-wq/proyek-arenasystem-plugin/releases/download/";
@@ -103,7 +103,7 @@ final class UpdateService {
         try {
             URI downloadUri = validateReleaseAssetUrl(
                     requiredString(manifest, "downloadUrl"),
-                    RELEASE_MOD_ASSET,
+                    releaseModAsset(remoteVersion),
                     "assassin-client-v" + remoteVersion);
             String expectedHash = requiredString(manifest, "sha256").toLowerCase(Locale.ROOT);
             if (!expectedHash.matches("[a-f0-9]{64}")) {
@@ -221,6 +221,17 @@ final class UpdateService {
         }
     }
 
+    private static String releaseModAsset(String version) throws IOException {
+        BigInteger[] parsedVersion = parseStableVersion(version, "manifest version");
+        BigInteger[] versionedAssetCutoff = {
+                BigInteger.ZERO, BigInteger.ONE, BigInteger.valueOf(3)
+        };
+        if (compareVersions(parsedVersion, versionedAssetCutoff) < 0) {
+            return LEGACY_RELEASE_MOD_ASSET;
+        }
+        return "arenaSystem_client-" + version + ".jar";
+    }
+
     private static URI helperAssetUri(String version) {
         return URI.create(RELEASE_DOWNLOAD_PREFIX
                 + "assassin-client-v" + version + "/" + HELPER_JAR);
@@ -275,7 +286,7 @@ final class UpdateService {
         parseStableVersion(version, "manifest version");
         parseStableVersion(requiredString(manifest, "loaderVersion"), "manifest loader version");
         validateReleaseAssetUrl(
-                requiredString(manifest, "downloadUrl"), RELEASE_MOD_ASSET, "assassin-client-v" + version);
+                requiredString(manifest, "downloadUrl"), releaseModAsset(version), "assassin-client-v" + version);
         String modHash = requiredString(manifest, "sha256");
         String helperHash = requiredString(manifest, "helperSha256");
         if (!modHash.matches("(?i)[a-f0-9]{64}") || !helperHash.matches("(?i)[a-f0-9]{64}")) {
