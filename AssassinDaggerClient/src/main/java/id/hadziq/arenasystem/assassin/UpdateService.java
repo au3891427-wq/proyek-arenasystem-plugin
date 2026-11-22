@@ -30,7 +30,7 @@ import java.util.Optional;
 
 final class UpdateService {
     private static final String MOD_ID = "arenasystem_assassin_dagger";
-    private static final String MOD_JAR = "arenasystem-assassin-dagger-client.jar";
+    private static final String RELEASE_ASSET = "arenasystem-assassin-dagger-client.jar";
     private static final String HELPER_JAR = "assassin-dagger-updater-0.1.0.jar";
     private static final String RELEASE_PATH_PREFIX =
             "/au3891427-wq/proyek-arenasystem-plugin/releases/download/";
@@ -86,20 +86,38 @@ final class UpdateService {
 
         if (compareVersions(remoteParts, localParts) <= 0) return;
 
-        Path target = localMod.get().getOrigin().getPaths().stream()
+        var installedJars = localMod.get().getOrigin().getPaths().stream()
+                .map(path -> path.toAbsolutePath().normalize())
                 .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
                 .filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".jar"))
-                .findFirst()
-                .orElseThrow(() -> new IOException("Could not locate installed mod JAR."))
-                .toAbsolutePath().normalize();
-        if (!MOD_JAR.equalsIgnoreCase(target.getFileName().toString())) {
-            throw new IOException("Unexpected installed mod filename: " + target.getFileName());
+                .distinct()
+                .toList();
+        if (installedJars.size() != 1) {
+            throw new IOException("Expected exactly one installed JAR for mod ID " + MOD_ID
+                    + ", found " + installedJars.size() + ".");
         }
+
+        Path target = installedJars.get(0);
         Path modsDirectory = target.getParent();
         if (modsDirectory == null
                 || !"mods".equalsIgnoreCase(modsDirectory.getFileName().toString())
                 || Files.isSymbolicLink(modsDirectory)) {
             throw new IOException("Mod must be installed directly inside a real mods directory.");
+        }
+
+        String targetFilename = target.getFileName().toString();
+        if (!targetFilename.toLowerCase(Locale.ROOT).endsWith(".jar")) {
+            throw new IOException("Installed mod origin is not a JAR file: " + targetFilename);
+        }
+
+        Path destination = modsDirectory.resolve("ArenaSystem_Client-" + remoteVersion + ".jar")
+                .toAbsolutePath().normalize();
+        if (!destination.getParent().equals(modsDirectory)) {
+            throw new IOException("Generated update destination escaped the mods directory.");
+        }
+        if (!destination.equals(target) && Files.exists(destination, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("Update destination already exists; refusing to overwrite: "
+                    + destination.getFileName());
         }
 
         if (!acquireUpdateLock(modsDirectory)) {
@@ -108,12 +126,12 @@ final class UpdateService {
         }
 
         boolean shutdownHookRegistered = false;
-        Path staged = modsDirectory.resolve(MOD_JAR + ".pending");
+        Path staged = destination.resolveSibling(destination.getFileName() + ".pending");
         boolean modStaged = false;
         try {
             URI downloadUri = validateReleaseAssetUrl(
                     requiredString(manifest, "downloadUrl"),
-                    MOD_JAR,
+                    RELEASE_ASSET,
                     "assassin-client-v" + remoteVersion);
             String expectedHash = requiredString(manifest, "sha256").toLowerCase(Locale.ROOT);
             if (!expectedHash.matches("[a-f0-9]{64}")) {
