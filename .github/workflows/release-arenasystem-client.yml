@@ -20,7 +20,7 @@ on:
       version:
         description: "Semantic version to build for a dry run (for example 0.1.0)"
         required: true
-        default: "0.1.4"
+        default: "0.1.5"
         type: string
       dry_run:
         description: "Dry-run when true; production publishing runs from main when false"
