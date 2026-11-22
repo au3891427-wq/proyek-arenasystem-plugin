@@ -1,12 +1,12 @@
 {
-  "modId": "arstm_client0qb201",
-  "downloadUrl": "https://github.com/au3891427-wq/proyek-arenasystem-plugin/releases/download/assassin-client-v0.1.4/ArenaSystem_Client-0.1.4.jar",
-  "loader": "fabric",
-  "sha256": "7389a8895727f84d6461b6cf3241dd6ae99084c31d338216b8e9c6e7c3a882cc",
-  "version": "0.1.4",
   "channel": "stable",
-  "minecraft": "26.3",
+  "modId": "arstm_client0qb201",
   "loaderVersion": "0.20.1",
   "helperSha256": "cd28e42e3966b0ad5d0148756f931515e117b4c25382f52015b9b7d2ec36a914",
+  "minecraft": "26.3",
+  "loader": "fabric",
+  "version": "0.1.5",
+  "sha256": "683e9df2e9dafac3817fd8d4445f99b74343ce86aa9fb9fb860e45da40f20666",
+  "downloadUrl": "https://github.com/au3891427-wq/proyek-arenasystem-plugin/releases/download/assassin-client-v0.1.5/ArenaSystem_Client-0.1.5.jar",
   "schemaVersion": 1
 }
