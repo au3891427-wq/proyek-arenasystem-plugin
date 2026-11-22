@@ -278,7 +278,7 @@ final class UpdateService {
         parseStableVersion(version, "manifest version");
         parseStableVersion(requiredString(manifest, "loaderVersion"), "manifest loader version");
         validateReleaseAssetUrl(
-                requiredString(manifest, "downloadUrl"), MOD_JAR, "assassin-client-v" + version);
+                requiredString(manifest, "downloadUrl"), RELEASE_ASSET, "assassin-client-v" + version);
         String modHash = requiredString(manifest, "sha256");
         String helperHash = requiredString(manifest, "helperSha256");
         if (!modHash.matches("(?i)[a-f0-9]{64}") || !helperHash.matches("(?i)[a-f0-9]{64}")) {
