@@ -30,6 +30,10 @@ public final class TestCompanionHandshakeProtocol {
                 CompanionHandshakeProtocol.createClientConnectionCheckProof(
                         secret, SESSION_ID, serverNonce, clientNonce, authNonce, checkNonce)),
                 CompanionHandshakeProtocol.Type.CONNECTION_CHECK, 57);
+        int[] messageBodyLengths = {32, 64, 64, 32, 64, 32, 32};
+        for (int i = 0; i < messageBodyLengths.length; i++) {
+            assertDecodedType(i + 1, messageBodyLengths[i]);
+        }
 
         assertHex("client-auth",
                 CompanionHandshakeProtocol.createClientAuthProof(secret, SESSION_ID, serverNonce, clientNonce, authNonce),
@@ -75,6 +79,21 @@ public final class TestCompanionHandshakeProtocol {
                 new byte[16], SESSION_ID, serverNonce, clientNonce, authNonce));
 
         System.out.println("ArenaSystem Handshake Protocol v2 tests passed.");
+    }
+
+    private static void assertDecodedType(int messageId, int bodyLength) {
+        ByteBuffer packet = ByteBuffer.allocate(CompanionHandshakeProtocol.HEADER_BYTES + bodyLength)
+                .order(ByteOrder.BIG_ENDIAN);
+        packet.putInt(1_095_979_570);
+        packet.put((byte) messageId);
+        packet.putInt(CompanionHandshakeProtocol.PROTOCOL_VERSION);
+        packet.putLong(SESSION_ID.getMostSignificantBits());
+        packet.putLong(SESSION_ID.getLeastSignificantBits());
+        packet.put(new byte[bodyLength]);
+        CompanionHandshakeProtocol.Message decoded = CompanionHandshakeProtocol.decode(packet.array());
+        if (decoded == null || decoded.type().ordinal() != messageId - 1) {
+            throw new AssertionError("Could not decode protocol message type " + messageId);
+        }
     }
 
     private static void assertMessage(byte[] encoded, CompanionHandshakeProtocol.Type type, int expectedLength) {
