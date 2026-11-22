@@ -6,15 +6,17 @@ This is a narrowly scoped helper launched by the Fabric client mod during JVM sh
 
 Arguments:
 
-`<minecraft-pid> <target-jar> <staged-jar> <expected-sha256>`
+`<minecraft-pid> <current-mod-jar> <new-mod-jar.pending> <expected-sha256>`
 
 - Waits up to 180 seconds for the Minecraft process to exit and then acquires the shared updater file lock.
-- Only replaces `arenasystem-assassin-dagger-client.jar`.
-- Requires target and staged JAR to be in the same directory named `mods`.
-- Requires staged filename `arenasystem-assassin-dagger-client.jar.pending`.
+- Accepts any current mod JAR filename; the Fabric client resolves the current JAR by Mod ID.
+- Derives the destination filename by removing `.pending` from the staged filename.
+- Supports both in-place replacement (same current/destination filename) and versioned replacement (for example, `ArenaSystem_Client-0.1.1.jar`).
+- Requires current, destination, and staged JAR paths to share one directory named `mods`.
+- Requires the staged filename to end in `.jar.pending`.
 - Uses the same `.arenasystem-assassin-dagger-update.lock` file as the client to serialize separate game instances.
 - Verifies SHA-256 before and after installation.
-- Keeps a `.backup` file and restores it if installation fails.
+- Keeps a verified backup of the old JAR. For versioned replacement, the old JAR is removed only after the new JAR passes SHA-256 verification; failures leave the old JAR intact.
 - Does not download files, execute scripts, or accept URLs.
 
 The Fabric mod must validate the manifest and download over HTTPS from the project's
