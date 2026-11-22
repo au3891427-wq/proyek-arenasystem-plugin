@@ -40,6 +40,6 @@ java {
 }
 
 tasks.named('jar') {
-    archiveFileName = 'arenasystem-assassin-dagger-client.jar'
+    archiveFileName = "ArenaSystem_Client-${project.version}.jar"
     from("LICENSE") { rename { "${it}_${project.base.archivesName.get()}" } }
 }

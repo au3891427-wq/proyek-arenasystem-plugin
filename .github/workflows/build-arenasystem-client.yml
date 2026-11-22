@@ -1,13 +1,13 @@
-name: Build Assassin Dagger Client
+name: Build ArenaSystem Client
 
 on:
   push:
     paths:
-      - "AssassinDaggerClient/**"
+      - "ArenaSystemClient/**"
       - ".github/workflows/build-assassin-client.yml"
   pull_request:
     paths:
-      - "AssassinDaggerClient/**"
+      - "ArenaSystemClient/**"
       - ".github/workflows/build-assassin-client.yml"
   workflow_dispatch:
 
@@ -27,11 +27,11 @@ jobs:
         with:
           gradle-version: "9.8.0"
       - name: Build client mod
-        working-directory: AssassinDaggerClient
+        working-directory: ArenaSystemClient
         run: gradle --no-daemon clean build
       - name: Upload client artifact
         uses: actions/upload-artifact@v4
         with:
-          name: assassin-dagger-client
-          path: AssassinDaggerClient/build/libs/arenasystem-assassin-dagger-client.jar
+          name: arenasystem-client
+          path: ArenaSystemClient/build/libs/ArenaSystem_Client-*.jar
           if-no-files-found: error

@@ -17,8 +17,9 @@ application {
 }
 
 tasks.jar {
-    archiveBaseName = 'assassin-dagger-updater'
+    archiveBaseName = 'arenasystem-client-updater'
     archiveVersion = project.version
+    archiveFileName = "ArenaSystem_Client_Updater-${project.version}.jar"
     manifest {
         attributes 'Main-Class': application.mainClass.get()
     }

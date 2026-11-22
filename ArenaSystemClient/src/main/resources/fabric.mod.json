@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "arstm_client0qb201",
+  "provides": ["arenasystem_assassin_dagger"],
+  "version": "${version}",
+  "name": "ArenaSystem Client",
+  "description": "ArenaSystem Fabric client module with verified automatic updates.",
+  "environment": "client",
+  "entrypoints": { "client": ["id.hadziq.arenasystem.client.ArenaSystemClient"] },
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "=${minecraft_version}",
+    "java": ">=25"
+  }
+}

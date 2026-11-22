@@ -1,4 +1,4 @@
-package id.hadziq.arenasystem.assassin;
+package id.hadziq.arenasystem.client;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
@@ -7,7 +7,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public final class AssassinDaggerClient implements ClientModInitializer {
+public final class ArenaSystemClient implements ClientModInitializer {
     private static final ExecutorService UPDATE_EXECUTOR = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "ArenaSystem-Updater");
         thread.setDaemon(true);

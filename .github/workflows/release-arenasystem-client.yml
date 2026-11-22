@@ -1,4 +1,4 @@
-name: Release Assassin Dagger Client
+name: Release ArenaSystem Client
 
 on:
   push:
@@ -7,20 +7,20 @@ on:
     tags:
       - "assassin-client-v*"
     paths:
-      - "AssassinDaggerClient/**"
-      - "AssassinDaggerUpdater/**"
+      - "ArenaSystemClient/**"
+      - "ArenaSystemUpdater/**"
       - ".github/workflows/release-assassin-client.yml"
   pull_request:
     paths:
-      - "AssassinDaggerClient/**"
-      - "AssassinDaggerUpdater/**"
+      - "ArenaSystemClient/**"
+      - "ArenaSystemUpdater/**"
       - ".github/workflows/release-assassin-client.yml"
   workflow_dispatch:
     inputs:
       version:
         description: "Semantic version to build for a dry run (for example 0.1.0)"
         required: true
-        default: "0.1.0"
+        default: "0.1.2"
         type: string
       dry_run:
         description: "Dry-run when true; production publishing runs from main when false"
@@ -52,7 +52,7 @@ jobs:
           gradle-version: "9.8.0"
 
       - name: Build client mod
-        working-directory: AssassinDaggerClient
+        working-directory: ArenaSystemClient
         shell: pwsh
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -94,7 +94,7 @@ jobs:
           gradle --no-daemon clean build "-Pmod_version=$version"
 
       - name: Build Windows updater helper
-        working-directory: AssassinDaggerUpdater
+        working-directory: ArenaSystemUpdater
         run: gradle --no-daemon clean build
 
       - name: Prepare and validate release assets
@@ -120,7 +120,7 @@ jobs:
             $version = $env:DISPATCH_VERSION
           }
           elseif ($env:EVENT_NAME -eq "pull_request") {
-            $versionLine = Get-Content "AssassinDaggerClient/gradle.properties" |
+            $versionLine = Get-Content "ArenaSystemClient/gradle.properties" |
               Where-Object { $_ -match '^mod_version=' } |
               Select-Object -First 1
             if (-not $versionLine) { throw "mod_version is missing from gradle.properties." }
@@ -131,7 +131,7 @@ jobs:
               $version = $env:REF_NAME -replace '^assassin-client-v', ''
             }
             elseif ($env:EVENT_NAME -eq "push" -and $env:REF_TYPE -eq "branch" -and $env:REF_NAME -eq "main") {
-              $versionLine = Get-Content "AssassinDaggerClient/gradle.properties" |
+              $versionLine = Get-Content "ArenaSystemClient/gradle.properties" |
                 Where-Object { $_ -match '^mod_version=' } |
                 Select-Object -First 1
               if (-not $versionLine) { throw "mod_version is missing from gradle.properties." }
@@ -151,7 +151,7 @@ jobs:
             throw "Release tag and build version do not match."
           }
 
-          $propertiesPath = "AssassinDaggerClient/gradle.properties"
+          $propertiesPath = "ArenaSystemClient/gradle.properties"
           $properties = @{}
           foreach ($line in Get-Content $propertiesPath) {
             if ($line -match '^([^#=]+)=(.*)$') {
@@ -168,10 +168,10 @@ jobs:
           $loaderVersion = $properties["loader_version"]
           if ($env:EVENT_NAME -eq "workflow_dispatch" -and $env:DRY_RUN -ne "true" -and
               $properties["mod_version"] -ne $version) {
-            throw "Manual release version must match AssassinDaggerClient/gradle.properties mod_version."
+            throw "Manual release version must match ArenaSystemClient/gradle.properties mod_version."
           }
-          $clientPath = "AssassinDaggerClient/build/libs/arenasystem-assassin-dagger-client.jar"
-          $helperPath = "AssassinDaggerUpdater/build/libs/assassin-dagger-updater-0.1.0.jar"
+          $clientPath = "ArenaSystemClient/build/libs/ArenaSystem_Client-$version.jar"
+          $helperPath = "ArenaSystemUpdater/build/libs/ArenaSystem_Client_Updater-0.1.0.jar"
           if (-not (Test-Path $clientPath -PathType Leaf)) { throw "Client JAR is missing: $clientPath" }
           if (-not (Test-Path $helperPath -PathType Leaf)) { throw "Updater JAR is missing: $helperPath" }
 
@@ -197,7 +197,8 @@ jobs:
 
           $expectedMinecraftDependency = "=$minecraftVersion"
           $expectedLoaderDependency = ">=$loaderVersion"
-          if ($modMetadata.id -ne "arenasystem_assassin_dagger" -or
+          if ($modMetadata.id -ne "arstm_client0qb201" -or
+              -not (@($modMetadata.provides) -contains "arenasystem_assassin_dagger") -or
               $modMetadata.version -ne $version -or
               $modMetadata.depends.minecraft -ne $expectedMinecraftDependency -or
               $modMetadata.depends.fabricloader -ne $expectedLoaderDependency -or
@@ -211,7 +212,24 @@ jobs:
             throw "Could not calculate valid SHA-256 hashes for release assets."
           }
 
-          $manifest = @{
+          $newAssetName = $client.Name
+          $legacyAssetName = "arenasystem-assassin-dagger-client.jar"
+          $newHelperAssetName = $helper.Name
+          $legacyHelperAssetName = "assassin-dagger-updater-0.1.0.jar"
+
+          $newManifest = @{
+            schemaVersion = 1
+            modId = "arstm_client0qb201"
+            version = $version
+            minecraft = $minecraftVersion
+            loader = "fabric"
+            loaderVersion = $loaderVersion
+            channel = "stable"
+            downloadUrl = "https://github.com/$($env:REPOSITORY)/releases/download/$tag/$newAssetName"
+            sha256 = $clientHash
+            helperSha256 = $helperHash
+          }
+          $legacyManifest = @{
             schemaVersion = 1
             modId = "arenasystem_assassin_dagger"
             version = $version
@@ -219,17 +237,21 @@ jobs:
             loader = "fabric"
             loaderVersion = $loaderVersion
             channel = "stable"
-            downloadUrl = "https://github.com/$($env:REPOSITORY)/releases/download/$tag/$($client.Name)"
+            downloadUrl = "https://github.com/$($env:REPOSITORY)/releases/download/$tag/$legacyAssetName"
             sha256 = $clientHash
             helperSha256 = $helperHash
-          } | ConvertTo-Json -Depth 4
+          }
 
           $manifestPath = "update-manifest.json"
-          $manifest | Set-Content -Path $manifestPath -Encoding utf8
+          $legacyManifestPath = "legacy-update-manifest.json"
+          $newManifest | ConvertTo-Json -Depth 4 | Set-Content -Path $manifestPath -Encoding utf8
+          $legacyManifest | ConvertTo-Json -Depth 4 | Set-Content -Path $legacyManifestPath -Encoding utf8
           $parsed = Get-Content -Raw $manifestPath | ConvertFrom-Json
-          $expectedDownloadUrl = "https://github.com/$($env:REPOSITORY)/releases/download/$tag/$($client.Name)"
+          $parsedLegacy = Get-Content -Raw $legacyManifestPath | ConvertFrom-Json
+          $expectedDownloadUrl = "https://github.com/$($env:REPOSITORY)/releases/download/$tag/$newAssetName"
+          $expectedLegacyDownloadUrl = "https://github.com/$($env:REPOSITORY)/releases/download/$tag/$legacyAssetName"
           if ($parsed.schemaVersion -ne 1 -or
-              $parsed.modId -ne "arenasystem_assassin_dagger" -or
+              $parsed.modId -ne "arstm_client0qb201" -or
               $parsed.version -ne $version -or
               $parsed.minecraft -ne $minecraftVersion -or
               $parsed.loader -ne "fabric" -or
@@ -238,17 +260,28 @@ jobs:
               $parsed.downloadUrl -ne $expectedDownloadUrl -or
               $parsed.sha256 -ne $clientHash -or
               $parsed.helperSha256 -ne $helperHash) {
-            throw "Generated update manifest failed validation."
+            throw "Generated ArenaSystem manifest failed validation."
+          }
+          if ($parsedLegacy.schemaVersion -ne 1 -or
+              $parsedLegacy.modId -ne "arenasystem_assassin_dagger" -or
+              $parsedLegacy.version -ne $version -or
+              $parsedLegacy.downloadUrl -ne $expectedLegacyDownloadUrl -or
+              $parsedLegacy.sha256 -ne $clientHash -or
+              $parsedLegacy.helperSha256 -ne $helperHash) {
+            throw "Generated legacy compatibility manifest failed validation."
           }
 
           New-Item -ItemType Directory -Force -Path "release-assets" | Out-Null
-          Copy-Item $client.FullName "release-assets/"
-          Copy-Item $helper.FullName "release-assets/assassin-dagger-updater-0.1.0.jar"
+          Copy-Item $client.FullName "release-assets/$newAssetName"
+          Copy-Item $client.FullName "release-assets/$legacyAssetName"
+          Copy-Item $helper.FullName "release-assets/$newHelperAssetName"
+          Copy-Item $helper.FullName "release-assets/$legacyHelperAssetName"
           Copy-Item $manifestPath "release-assets/"
+          Copy-Item $legacyManifestPath "release-assets/"
 
           $assetCount = (Get-ChildItem "release-assets" -File).Count
-          if ($assetCount -ne 3) { throw "Expected 3 release assets, found $assetCount." }
-          Write-Host "Prepared 3 assets for $tag (Minecraft $minecraftVersion, Fabric Loader $loaderVersion)."
+          if ($assetCount -ne 6) { throw "Expected 6 release assets, found $assetCount." }
+          Write-Host "Prepared 6 ArenaSystem release assets for $tag (Minecraft $minecraftVersion, Fabric Loader $loaderVersion)."
 
           $shouldPublish = "false"
           if (-not $isDryRun) {
@@ -282,7 +315,7 @@ jobs:
       - name: Upload prepared release assets
         uses: actions/upload-artifact@v4
         with:
-          name: assassin-client-release-assets
+          name: arenasystem-client-release-assets
           path: release-assets/*
           if-no-files-found: error
 
@@ -302,13 +335,13 @@ jobs:
       - name: Download prepared release assets
         uses: actions/download-artifact@v4
         with:
-          name: assassin-client-release-assets
+          name: arenasystem-client-release-assets
           path: release-assets
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Assassin Dagger Client ${{ needs.prepare.outputs.release_tag }}
+          name: ArenaSystem Client ${{ needs.prepare.outputs.release_tag }}
           tag_name: ${{ needs.prepare.outputs.release_tag }}
           target_commitish: ${{ github.sha }}
           draft: false
@@ -323,30 +356,52 @@ jobs:
           RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
         run: |
           $ErrorActionPreference = "Stop"
-          $manifestSource = "release-assets/update-manifest.json"
-          $manifestTarget = "assassin-client-update-manifest.json"
-          if (-not (Test-Path $manifestSource -PathType Leaf)) {
-            throw "Generated update manifest is missing."
+          $newManifestSource = "release-assets/update-manifest.json"
+          $legacyManifestSource = "release-assets/legacy-update-manifest.json"
+          $newManifestTarget = "arstm-client0qb201-update-manifest.json"
+          $legacyManifestTarget = "assassin-client-update-manifest.json"
+          if (-not (Test-Path $newManifestSource -PathType Leaf) -or
+              -not (Test-Path $legacyManifestSource -PathType Leaf)) {
+            throw "Generated client manifests are missing."
           }
 
-          $newManifest = Get-Content -Raw $manifestSource | ConvertFrom-Json
-          if (-not $newManifest.version -or $newManifest.channel -ne "stable") {
-            throw "Generated update manifest is not a stable client manifest."
+          $newManifest = Get-Content -Raw $newManifestSource | ConvertFrom-Json
+          $legacyManifest = Get-Content -Raw $legacyManifestSource | ConvertFrom-Json
+          if ($newManifest.modId -ne "arstm_client0qb201" -or
+              $legacyManifest.modId -ne "arenasystem_assassin_dagger" -or
+              $newManifest.version -ne $legacyManifest.version -or
+              $newManifest.sha256 -ne $legacyManifest.sha256) {
+            throw "New and legacy manifests are inconsistent."
           }
 
-          if (Test-Path $manifestTarget -PathType Leaf) {
-            $currentManifest = Get-Content -Raw $manifestTarget | ConvertFrom-Json
-            if ($currentManifest.version) {
-              if ([version]$currentManifest.version -ge [version]$newManifest.version) {
-                Write-Host "The public manifest already points to an equal or newer client version."
-                exit 0
-              }
+          $manifestTargets = @(
+            @{ Source = $newManifestSource; Target = $newManifestTarget },
+            @{ Source = $legacyManifestSource; Target = $legacyManifestTarget }
+          )
+          $requiresUpdate = $false
+          foreach ($entry in $manifestTargets) {
+            if (-not (Test-Path $entry.Target -PathType Leaf)) {
+              $requiresUpdate = $true
+              continue
+            }
+            $currentManifest = Get-Content -Raw $entry.Target | ConvertFrom-Json
+            if (-not $currentManifest.version -or
+                [version]$currentManifest.version -lt [version]$newManifest.version) {
+              $requiresUpdate = $true
             }
           }
 
-          Copy-Item $manifestSource $manifestTarget -Force
+          if (-not $requiresUpdate) {
+            Write-Host "Both public manifests already point to an equal or newer version."
+            exit 0
+          }
+
+          foreach ($entry in $manifestTargets) {
+            Copy-Item $entry.Source $entry.Target -Force
+          }
+
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add $manifestTarget
-          git commit -m "Publish Assassin client update manifest for $env:RELEASE_TAG"
+          git config user.email "41898282+users.noreply.github.com"
+          git add $newManifestTarget $legacyManifestTarget
+          git commit -m "Publish ArenaSystem Client $($newManifest.version) update manifests"
           git push origin HEAD:main

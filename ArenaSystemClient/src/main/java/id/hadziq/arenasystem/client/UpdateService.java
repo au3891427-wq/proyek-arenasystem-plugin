@@ -1,4 +1,4 @@
-package id.hadziq.arenasystem.assassin;
+package id.hadziq.arenasystem.client;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
@@ -29,13 +29,13 @@ import java.util.Locale;
 import java.util.Optional;
 
 final class UpdateService {
-    private static final String MOD_ID = "arenasystem_assassin_dagger";
-    private static final String RELEASE_ASSET = "arenasystem-assassin-dagger-client.jar";
-    private static final String HELPER_JAR = "assassin-dagger-updater-0.1.0.jar";
+    private static final String MOD_ID = "arstm_client0qb201";
+    private static final String LEGACY_MOD_ID = "arenasystem_assassin_dagger";
+    private static final String HELPER_JAR = "ArenaSystem_Client_Updater-0.1.0.jar";
     private static final String RELEASE_PATH_PREFIX =
             "/au3891427-wq/proyek-arenasystem-plugin/releases/download/";
     private static final URI MANIFEST_URI = URI.create(
-            "https://raw.githubusercontent.com/au3891427-wq/proyek-arenasystem-plugin/main/assassin-client-update-manifest.json");
+            "https://raw.githubusercontent.com/au3891427-wq/proyek-arenasystem-plugin/main/arstm-client0qb201-update-manifest.json");
     private static final String RELEASE_DOWNLOAD_PREFIX =
             "https://github.com/au3891427-wq/proyek-arenasystem-plugin/releases/download/";
     private static final String UPDATE_LOCK_FILE = ".arenasystem-assassin-dagger-update.lock";
@@ -52,7 +52,8 @@ final class UpdateService {
     private UpdateService() { }
 
     static void checkAndStage(FabricLoader loader) throws Exception {
-        Optional<ModContainer> localMod = loader.getModContainer(MOD_ID);
+        Optional<ModContainer> localMod = loader.getModContainer(MOD_ID)
+                .or(() -> loader.getModContainer(LEGACY_MOD_ID));
         if (localMod.isEmpty()) return;
 
         JsonObject manifest = fetchManifest();
@@ -121,7 +122,7 @@ final class UpdateService {
         }
 
         if (!acquireUpdateLock(modsDirectory)) {
-            System.out.println("[ArenaSystem] Another Assassin Dagger update is already in progress; skipping this check.");
+            System.out.println("[ArenaSystem] Another ArenaSystem Client update is already in progress; skipping this check.");
             return;
         }
 
@@ -131,7 +132,7 @@ final class UpdateService {
         try {
             URI downloadUri = validateReleaseAssetUrl(
                     requiredString(manifest, "downloadUrl"),
-                    RELEASE_ASSET,
+                    releaseAssetName(remoteVersion),
                     "assassin-client-v" + remoteVersion);
             String expectedHash = requiredString(manifest, "sha256").toLowerCase(Locale.ROOT);
             if (!expectedHash.matches("[a-f0-9]{64}")) {
@@ -224,6 +225,10 @@ final class UpdateService {
         }
     }
 
+    private static String releaseAssetName(String version) {
+        return "ArenaSystem_Client-" + version + ".jar";
+    }
+
     private static URI helperAssetUri(String version) {
         return URI.create(RELEASE_DOWNLOAD_PREFIX
                 + "assassin-client-v" + version + "/" + HELPER_JAR);
@@ -233,7 +238,7 @@ final class UpdateService {
         HttpRequest request = HttpRequest.newBuilder(MANIFEST_URI)
                 .timeout(Duration.ofSeconds(20))
                 .header("Accept", "application/json")
-                .header("User-Agent", "ArenaSystem-AssassinDagger-Updater")
+                .header("User-Agent", "ArenaSystem-Client-Updater")
                 .GET()
                 .build();
         HttpResponse<InputStream> response = HTTP.send(request, HttpResponse.BodyHandlers.ofInputStream());
@@ -278,7 +283,7 @@ final class UpdateService {
         parseStableVersion(version, "manifest version");
         parseStableVersion(requiredString(manifest, "loaderVersion"), "manifest loader version");
         validateReleaseAssetUrl(
-                requiredString(manifest, "downloadUrl"), RELEASE_ASSET, "assassin-client-v" + version);
+                requiredString(manifest, "downloadUrl"), releaseAssetName(version), "assassin-client-v" + version);
         String modHash = requiredString(manifest, "sha256");
         String helperHash = requiredString(manifest, "helperSha256");
         if (!modHash.matches("(?i)[a-f0-9]{64}") || !helperHash.matches("(?i)[a-f0-9]{64}")) {
@@ -370,7 +375,7 @@ final class UpdateService {
 
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .timeout(Duration.ofMinutes(3))
-                .header("User-Agent", "ArenaSystem-AssassinDagger-Updater")
+                .header("User-Agent", "ArenaSystem-Client-Updater")
                 .GET()
                 .build();
         MessageDigest digest = sha256Digest();

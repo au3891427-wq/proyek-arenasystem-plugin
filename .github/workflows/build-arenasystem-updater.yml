@@ -1,13 +1,13 @@
-name: Build Assassin Dagger Updater
+name: Build ArenaSystem Client Updater
 
 on:
   push:
     paths:
-      - "AssassinDaggerUpdater/**"
+      - "ArenaSystemUpdater/**"
       - ".github/workflows/build-assassin-updater.yml"
   pull_request:
     paths:
-      - "AssassinDaggerUpdater/**"
+      - "ArenaSystemUpdater/**"
       - ".github/workflows/build-assassin-updater.yml"
   workflow_dispatch:
 
@@ -27,16 +27,16 @@ jobs:
         with:
           gradle-version: "9.8.0"
       - name: Build helper
-        working-directory: AssassinDaggerUpdater
+        working-directory: ArenaSystemUpdater
         run: gradle --no-daemon clean build
       - name: Smoke-test Windows installation and failure handling
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $helper = (Resolve-Path "AssassinDaggerUpdater/build/libs/assassin-dagger-updater-0.1.0.jar").Path
+          $helper = (Resolve-Path "ArenaSystemUpdater/build/libs/ArenaSystem_Client_Updater-0.1.0.jar").Path
           $testRoot = Join-Path $env:RUNNER_TEMP ("arenasystem-updater-test-" + [guid]::NewGuid().ToString("N"))
           $mods = Join-Path $testRoot "mods"
-          $target = Join-Path $mods "arenasystem-assassin-dagger-client.jar"
+          $target = Join-Path $mods "custom-installed-client.jar"
           $staged = "$target.pending"
           $backup = "$target.backup"
           $failed = "$target.failed"
@@ -103,9 +103,9 @@ jobs:
             #    install the new versioned filename, and remove the old JAR only
             #    after the new file has been verified.
             $oldVersioned = Join-Path $mods "custom-assassin-client-old.jar"
-            $newVersioned = Join-Path $mods "ArenaSystem_Client-0.1.1.jar"
+            $newVersioned = Join-Path $mods "ArenaSystem_Client-0.1.2.jar"
             $versionedStaged = "$newVersioned.pending"
-            $versionedBackup = "$oldVersioned.backup-ArenaSystem_Client-0.1.1"
+            $versionedBackup = "$oldVersioned.backup-ArenaSystem_Client-0.1.2"
             [System.IO.File]::WriteAllText($oldVersioned, "old-client-version")
             [System.IO.File]::WriteAllText($versionedStaged, "new-versioned-client")
             $versionedHash = (Get-FileHash $versionedStaged -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -251,6 +251,6 @@ jobs:
       - name: Upload helper artifact
         uses: actions/upload-artifact@v4
         with:
-          name: assassin-dagger-windows-updater
-          path: AssassinDaggerUpdater/build/libs/assassin-dagger-updater-0.1.0.jar
+          name: arenasystem-client-windows-updater
+          path: ArenaSystemUpdater/build/libs/ArenaSystem_Client_Updater-0.1.0.jar
           if-no-files-found: error
