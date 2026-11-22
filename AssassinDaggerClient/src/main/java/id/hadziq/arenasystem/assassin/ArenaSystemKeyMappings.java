@@ -18,7 +18,7 @@ public final class ArenaSystemKeyMappings {
     private static final KeyMapping OFFHAND_STRIKE = KeyMappingHelper.registerKeyMapping(
             new KeyMapping(
                     "key.arenasystem_assassin_dagger.offhand_strike",
-                    InputConstants.Type.KEYSYM,
+                    InputConstants.Type.KEYBOARD,
                     InputConstants.KEY_R,
                     CATEGORY
             )
@@ -35,7 +35,7 @@ public final class ArenaSystemKeyMappings {
         while (OFFHAND_STRIKE.consumeClick()) {
             if (client.player == null
                     || client.gameMode == null
-                    || client.screen != null
+                    || client.gui.screen() != null
                     || !client.player.isAlive()
                     || !client.player.getMainHandItem().is(Items.GOLDEN_SWORD)
                     || !client.player.getOffhandItem().is(Items.GOLDEN_SWORD)) {
