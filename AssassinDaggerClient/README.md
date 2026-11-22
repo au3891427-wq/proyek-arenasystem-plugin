@@ -8,7 +8,8 @@ Fabric client-side module for ArenaSystem, targeting Minecraft 26.3 and Java 25.
 - Stable-channel update manifest check at startup.
 - HTTPS-only GitHub release downloads.
 - SHA-256 verification and bounded download sizes.
-- Staging beside the installed mod JAR.
+- Mod discovery by Fabric Mod ID rather than an assumed JAR filename.
+- Versioned local JAR installation (`ArenaSystem_Client-<version>.jar`).
 - Windows shutdown helper handoff; the helper waits for Minecraft to exit before replacing the JAR.
 - Backup and rollback behavior in the standalone helper.
 
@@ -78,23 +79,25 @@ tag-triggered publish job.
 
 1. Client checks the latest stable release in the background.
 2. It verifies mod ID, loader, exact Minecraft version, HTTPS GitHub URL, and SHA-256.
-3. It downloads the mod JAR to `mods/arenasystem-assassin-dagger-client.jar.pending`.
-4. It downloads and verifies the matching helper from the same release tag into `.arenasystem/updater/`.
-5. A file lock in `mods/` prevents separate Minecraft instances from staging overlapping updates.
-6. During JVM shutdown, it starts the helper with the current Minecraft PID, using `javaw.exe`
+3. It resolves the installed JAR path from the Fabric mod container found by `modId`; no local JAR filename is hard-coded.
+4. It stages the release as `mods/ArenaSystem_Client-<version>.jar.pending`.
+5. It downloads and verifies the matching helper from the same release tag into `.arenasystem/updater/`.
+6. A file lock in `mods/` prevents separate Minecraft instances from staging overlapping updates.
+7. During JVM shutdown, it starts the helper with the current Minecraft PID, using `javaw.exe`
    or the `java.exe` fallback from the active Java runtime.
-7. The helper waits for Minecraft to exit and for the update lock to become available, backs up
-   the current JAR, installs the staged JAR, verifies the installed hash, and restores the backup
-   if installation fails.
+8. The helper waits for Minecraft to exit, backs up the old JAR, installs and verifies the new
+   versioned JAR, then removes the old JAR. If installation fails, the old JAR remains available
+   and the new destination is quarantined or removed.
 
 The updater does not install Paper plugin JARs and does not execute content from the manifest.
 
 ## Limitations before production
 
 - First release must be published before automatic updates can work.
-- The mod JAR filename must remain exactly `arenasystem-assassin-dagger-client.jar`.
+- The published GitHub release asset keeps its stable download name, while the installed local JAR is named `ArenaSystem_Client-<version>.jar`.
 - Automatic replacement is currently Windows-only. Other operating systems retain the verified
   staged update without replacing the active JAR.
 - SHA-256 protects against accidental corruption and mismatched assets. It does not provide
   independent publisher authenticity if the GitHub repository/release itself is compromised.
+- Existing v0.1.0 clients use their older fixed staging name for the first automatic update; the new Mod-ID-based naming flow applies to subsequent updates. To use a versioned filename immediately, reinstall the new release once using its versioned local filename.
 - End-to-end testing on a real Windows Minecraft installation is still required.
