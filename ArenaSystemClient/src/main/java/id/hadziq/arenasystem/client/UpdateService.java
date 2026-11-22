@@ -54,7 +54,13 @@ final class UpdateService {
     static void checkAndStage(FabricLoader loader) throws Exception {
         Optional<ModContainer> localMod = loader.getModContainer(MOD_ID)
                 .or(() -> loader.getModContainer(LEGACY_MOD_ID));
-        if (localMod.isEmpty()) return;
+        if (localMod.isEmpty()) {
+            System.out.println("[ArenaSystem Updater] Client mod container not found; update check skipped.");
+            return;
+        }
+        String installedVersion = localMod.get().getMetadata().getVersion().getFriendlyString();
+        System.out.println("[ArenaSystem Updater] Checking updates for " + MOD_ID
+                + " (installed " + installedVersion + ").");
 
         JsonObject manifest = fetchManifest();
         validateManifest(manifest);
@@ -85,7 +91,11 @@ final class UpdateService {
             return;
         }
 
-        if (compareVersions(remoteParts, localParts) <= 0) return;
+        if (compareVersions(remoteParts, localParts) <= 0) {
+            System.out.println("[ArenaSystem Updater] Client is already up to date (" + localVersion + ").");
+            return;
+        }
+        System.out.println("[ArenaSystem Updater] Update available: " + localVersion + " -> " + remoteVersion + ".");
 
         var installedJars = localMod.get().getOrigin().getPaths().stream()
                 .map(path -> path.toAbsolutePath().normalize())
@@ -99,6 +109,7 @@ final class UpdateService {
         }
 
         Path target = installedJars.get(0);
+        System.out.println("[ArenaSystem Updater] Located installed client JAR: " + target.getFileName());
         Path modsDirectory = target.getParent();
         if (modsDirectory == null
                 || !"mods".equalsIgnoreCase(modsDirectory.getFileName().toString())

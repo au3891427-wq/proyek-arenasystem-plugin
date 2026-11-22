@@ -10,6 +10,17 @@ Fabric client module for ArenaSystem, targeting Minecraft 26.3 and Java 25.
 
 Install only one ArenaSystem client JAR in the `mods` directory. Do not keep old and new JARs side by side.
 
+## Features
+
+- Paper companion handshake on `arenasystem:mod_handshake`.
+- Responds to the server's 16-byte UUID challenge using protocol version 1 and a 20-byte response.
+- Startup update check with HTTPS GitHub release downloads and SHA-256 verification.
+- Resolves the installed client JAR by Mod ID, then stages `ArenaSystem_Client-<version>.jar`.
+- Windows shutdown helper with verified backup and rollback.
+
+The client module currently provides the handshake and updater foundation. Dagger rendering,
+animations, and input handling are not implemented in this module yet.
+
 ## Build
 
 Requires JDK 25 and Gradle 9.8.0.
@@ -20,28 +31,31 @@ gradle --no-daemon clean build
 
 Output: `build/libs/ArenaSystem_Client-<version>.jar`.
 
-## Updates and compatibility
+Fabric API is a required runtime dependency. The build compiles against Fabric API
+`0.166.2+26.3`, and the mod declares `fabric-api` as a required dependency.
+
+## Updates and old-client compatibility
 
 New clients read `arstm-client0qb201-update-manifest.json`. Installed v0.1.0/v0.1.1 clients
-continue reading `assassin-client-update-manifest.json`. Each new release therefore publishes
-identical verified client bytes under both `ArenaSystem_Client-<version>.jar` and the old
+continue reading `assassin-client-update-manifest.json`. Each new release publishes identical
+verified client bytes under both `ArenaSystem_Client-<version>.jar` and the old
 `arenasystem-assassin-dagger-client.jar` asset name. The legacy manifest retains the old Mod ID
 and URL. The new JAR declares the old ID via Fabric's `provides` metadata.
 
 The helper is published under both its new and old asset names. The release tag prefix
 `assassin-client-v` is retained only because old updaters validate that URL layout.
 
-The client currently contains the updater foundation only; Dagger rendering, animations, input
-handling, and Paper plugin networking are not implemented here. Automatic replacement is
-Windows-only; other OSes require manual installation of the verified staged JAR.
+Automatic replacement is Windows-only; other operating systems require manual installation of
+the verified staged JAR. The updater does not update the Paper server plugin.
 
 ## Windows update flow
 
-The client verifies Mod ID, loader, Minecraft version, HTTPS GitHub URL, and SHA-256; discovers
-its active JAR by Mod ID; then stages `mods/ArenaSystem_Client-<version>.jar.pending`.
-The helper waits for Minecraft to exit, backs up the old JAR, verifies the new JAR, and only then
-removes the old one. The historical updater lock filename remains in use so old and new updater
-versions coordinate through one lock.
+The client checks its manifest at startup, verifies Mod ID, loader, Minecraft version, HTTPS URL,
+and SHA-256, then discovers its installed JAR by Mod ID. It stages
+`mods/ArenaSystem_Client-<version>.jar.pending`. The helper waits for Minecraft to exit, backs up
+the old JAR, verifies the new JAR, and only then removes the old one.
 
-GitHub Actions builds and tests the client and helper. A real Minecraft Windows shutdown-hook test
-is still required before automatic replacement can be considered fully production-validated.
+GitHub Actions builds the client and helper, runs the binary handshake protocol test, and validates
+the generated release metadata. A real Minecraft Windows shutdown-hook and Paper server
+integration test are still required before automatic replacement and handshake can be called
+fully production-validated.

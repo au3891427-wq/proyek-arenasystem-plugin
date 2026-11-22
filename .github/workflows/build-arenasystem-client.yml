@@ -29,6 +29,20 @@ jobs:
       - name: Build client mod
         working-directory: ArenaSystemClient
         run: gradle --no-daemon clean build
+      - name: Test companion handshake binary protocol
+        working-directory: ArenaSystemClient
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $testDir = Join-Path $env:RUNNER_TEMP "arenasystem-handshake-test"
+          New-Item -ItemType Directory -Force -Path $testDir | Out-Null
+          & javac -d $testDir `
+            "src/main/java/id/hadziq/arenasystem/client/CompanionHandshakeProtocol.java" `
+            "tools/TestCompanionHandshakeProtocol.java"
+          if ($LASTEXITCODE -ne 0) { throw "Could not compile handshake protocol test." }
+          & java -cp $testDir id.hadziq.arenasystem.client.TestCompanionHandshakeProtocol
+          if ($LASTEXITCODE -ne 0) { throw "Handshake protocol test failed." }
+
       - name: Upload client artifact
         uses: actions/upload-artifact@v4
         with:

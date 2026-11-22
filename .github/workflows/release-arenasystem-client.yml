@@ -20,7 +20,7 @@ on:
       version:
         description: "Semantic version to build for a dry run (for example 0.1.0)"
         required: true
-        default: "0.1.2"
+        default: "0.1.4"
         type: string
       dry_run:
         description: "Dry-run when true; production publishing runs from main when false"
@@ -202,7 +202,8 @@ jobs:
               $modMetadata.version -ne $version -or
               $modMetadata.depends.minecraft -ne $expectedMinecraftDependency -or
               $modMetadata.depends.fabricloader -ne $expectedLoaderDependency -or
-              $modMetadata.depends.java -ne ">=25") {
+              $modMetadata.depends.java -ne ">=25" -or
+              $modMetadata.depends.'fabric-api' -ne "*") {
             throw "Built JAR metadata does not match the intended release configuration."
           }
 
