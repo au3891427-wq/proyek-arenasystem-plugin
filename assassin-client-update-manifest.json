@@ -1,12 +1,12 @@
 {
-  "helperSha256": "85d7624d1f693f34253e0aad80e486716f8c29ec26b91ab7baf2ae5b463778b5",
-  "loaderVersion": "0.20.1",
+  "helperSha256": "cd28e42e3966b0ad5d0148756f931515e117b4c25382f52015b9b7d2ec36a914",
+  "downloadUrl": "https://github.com/au3891427-wq/proyek-arenasystem-plugin/releases/download/assassin-client-v0.1.1/arenasystem-assassin-dagger-client.jar",
   "loader": "fabric",
-  "minecraft": "26.3",
-  "version": "0.1.0",
-  "sha256": "a015796a9ce88dcbb286bea2e81a19288d60c254ea48c8d5f190f1096abf4b19",
-  "schemaVersion": 1,
-  "modId": "arenasystem_assassin_dagger",
+  "loaderVersion": "0.20.1",
   "channel": "stable",
-  "downloadUrl": "https://github.com/au3891427-wq/proyek-arenasystem-plugin/releases/download/assassin-client-v0.1.0/arenasystem-assassin-dagger-client.jar"
+  "minecraft": "26.3",
+  "modId": "arenasystem_assassin_dagger",
+  "schemaVersion": 1,
+  "sha256": "f06da6858425ce880817b72f120a4ab452dd7a765709452a793e1dc46988acb4",
+  "version": "0.1.1"
 }
