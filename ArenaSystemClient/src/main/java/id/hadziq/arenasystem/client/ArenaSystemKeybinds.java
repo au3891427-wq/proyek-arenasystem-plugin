@@ -6,14 +6,11 @@ import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.ByteTag;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
-import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
@@ -114,10 +111,10 @@ final class ArenaSystemKeybinds {
         long now = System.nanoTime();
         if (primaryPressed && isDebounceReady(now, lastPrimaryInput)) {
             lastPrimaryInput = now;
-            triggerPrimarySkill(client, player);
+            triggerPrimarySkill();
         } else if (secondaryPressed && isDebounceReady(now, lastSecondaryInput)) {
             lastSecondaryInput = now;
-            triggerSecondarySkill(client, player);
+            triggerSecondarySkill();
         } else if (classSkillItemPressed && isDebounceReady(now, lastClassSkillItemInput)) {
             lastClassSkillItemInput = now;
             triggerClassSkillItem(client, player);
@@ -131,35 +128,12 @@ final class ArenaSystemKeybinds {
         return previous == 0L || now - previous >= INPUT_DEBOUNCE_NANOS;
     }
 
-    private static void triggerPrimarySkill(Minecraft client, LocalPlayer player) {
-        if (isSecondaryModifierHeld(client, player)) {
-            return;
-        }
-        sendSwapHands(client);
+    private static void triggerPrimarySkill() {
+        SkillInputClient.send(SkillInputProtocol.ACTION_PRIMARY);
     }
 
-    private static void triggerSecondarySkill(Minecraft client, LocalPlayer player) {
-        if (!isSecondaryModifierHeld(client, player)) {
-            return;
-        }
-        sendSwapHands(client);
-    }
-
-    private static boolean isSecondaryModifierHeld(Minecraft client, LocalPlayer player) {
-        return client.options.keyShift.isDown()
-                || client.options.keySprint.isDown()
-                || player.isShiftKeyDown()
-                || player.isSprinting();
-    }
-
-    private static void sendSwapHands(Minecraft client) {
-        if (client.getConnection() == null) {
-            return;
-        }
-        client.getConnection().send(new ServerboundPlayerActionPacket(
-                ServerboundPlayerActionPacket.Action.SWAP_ITEM_WITH_OFFHAND,
-                BlockPos.ZERO,
-                Direction.DOWN));
+    private static void triggerSecondarySkill() {
+        SkillInputClient.send(SkillInputProtocol.ACTION_SECONDARY);
     }
 
     private static void triggerClassSkillItem(Minecraft client, LocalPlayer player) {
