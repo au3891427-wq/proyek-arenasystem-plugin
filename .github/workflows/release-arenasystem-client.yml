@@ -203,7 +203,9 @@ jobs:
               $modMetadata.depends.minecraft -ne $expectedMinecraftDependency -or
               $modMetadata.depends.fabricloader -ne $expectedLoaderDependency -or
               $modMetadata.depends.java -ne ">=25" -or
-              $modMetadata.depends.'fabric-api' -ne "*") {
+              $modMetadata.depends.'fabric-api' -ne "*" -or
+              $modMetadata.depends.'fabric-key-mapping-api-v1' -ne "*" -or
+              $modMetadata.depends.PSObject.Properties.Name -contains "fabric-key-binding-api-v1") {
             throw "Built JAR metadata does not match the intended release configuration."
           }
 

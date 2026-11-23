@@ -33,11 +33,11 @@ final class UpdateService {
     private static final String LEGACY_MOD_ID = "arenasystem_assassin_dagger";
     private static final String HELPER_JAR = "ArenaSystem_Client_Updater-0.1.0.jar";
     private static final String RELEASE_PATH_PREFIX =
-            "/au3891427-wq/proyek-arenasystem-plugin/releases/download/";
+            "/au3891427-wq/Arena-System-Plugins-Client-and-Server/releases/download/";
     private static final URI MANIFEST_URI = URI.create(
-            "https://raw.githubusercontent.com/au3891427-wq/proyek-arenasystem-plugin/main/arstm-client0qb201-update-manifest.json");
+            "https://raw.githubusercontent.com/au3891427-wq/Arena-System-Plugins-Client-and-Server/main/arstm-client0qb201-update-manifest.json");
     private static final String RELEASE_DOWNLOAD_PREFIX =
-            "https://github.com/au3891427-wq/proyek-arenasystem-plugin/releases/download/";
+            "https://github.com/au3891427-wq/Arena-System-Plugins-Client-and-Server/releases/download/";
     private static final String UPDATE_LOCK_FILE = ".arenasystem-assassin-dagger-update.lock";
     private static final long MAX_MANIFEST_BYTES = 64L * 1024;
     private static final long MAX_MOD_BYTES = 64L * 1024 * 1024;
@@ -66,6 +66,7 @@ final class UpdateService {
         validateManifest(manifest);
 
         String remoteVersion = requiredString(manifest, "version");
+        String releaseTag = requiredString(manifest, "releaseTag");
         String localVersion = localMod.get().getMetadata().getVersion().getFriendlyString();
         BigInteger[] remoteParts = parseStableVersion(remoteVersion, "manifest version");
         BigInteger[] localParts = parseStableVersion(localVersion, "installed mod version");
@@ -153,7 +154,7 @@ final class UpdateService {
             downloadVerified(downloadUri, staged, expectedHash, MAX_MOD_BYTES);
             modStaged = true;
             downloadHelper(
-                    loader.getGameDir(), remoteVersion, requiredString(manifest, "helperSha256"));
+                    loader.getGameDir(), releaseTag, requiredString(manifest, "helperSha256"));
 
             Runtime.getRuntime().addShutdownHook(new Thread(
                     () -> launchHelper(target, staged, expectedHash, loader.getGameDir()),
@@ -240,9 +241,8 @@ final class UpdateService {
         return "ArenaSystem_Client-" + version + ".jar";
     }
 
-    private static URI helperAssetUri(String version) {
-        return URI.create(RELEASE_DOWNLOAD_PREFIX
-                + "assassin-client-v" + version + "/" + HELPER_JAR);
+    private static URI helperAssetUri(String releaseTag) {
+        return URI.create(RELEASE_DOWNLOAD_PREFIX + releaseTag + "/" + HELPER_JAR);
     }
 
     private static JsonObject fetchManifest() throws IOException, InterruptedException {
@@ -291,10 +291,14 @@ final class UpdateService {
             throw new IOException("Manifest loader is not Fabric.");
         }
         String version = requiredString(manifest, "version");
+        String releaseTag = requiredString(manifest, "releaseTag");
+        if (!releaseTag.matches("[A-Za-z0-9._-]{1,128}")) {
+            throw new IOException("Manifest releaseTag contains unsupported characters.");
+        }
         parseStableVersion(version, "manifest version");
         parseStableVersion(requiredString(manifest, "loaderVersion"), "manifest loader version");
         validateReleaseAssetUrl(
-                requiredString(manifest, "downloadUrl"), releaseAssetName(version), "assassin-client-v" + version);
+                requiredString(manifest, "downloadUrl"), releaseAssetName(version), releaseTag);
         String modHash = requiredString(manifest, "sha256");
         String helperHash = requiredString(manifest, "helperSha256");
         if (!modHash.matches("(?i)[a-f0-9]{64}") || !helperHash.matches("(?i)[a-f0-9]{64}")) {
@@ -355,14 +359,13 @@ final class UpdateService {
         }
     }
 
-    private static void downloadHelper(Path gameDirectory, String version, String helperHash)
+    private static void downloadHelper(Path gameDirectory, String releaseTag, String helperHash)
             throws IOException, InterruptedException {
         if (!helperHash.matches("(?i)[a-f0-9]{64}")) {
             throw new IOException("Helper SHA-256 is malformed.");
         }
-        URI helperUri = helperAssetUri(version);
-        validateReleaseAssetUrl(
-                helperUri.toString(), HELPER_JAR, "assassin-client-v" + version);
+        URI helperUri = helperAssetUri(releaseTag);
+        validateReleaseAssetUrl(helperUri.toString(), HELPER_JAR, releaseTag);
         Path helper = gameDirectory.resolve(".arenasystem/updater").resolve(HELPER_JAR);
         Path staged = helper.resolveSibling(helper.getFileName() + ".download");
         Files.createDirectories(helper.getParent());
