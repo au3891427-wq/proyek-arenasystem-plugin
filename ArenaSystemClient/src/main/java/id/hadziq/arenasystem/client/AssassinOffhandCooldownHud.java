@@ -7,11 +7,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.resources.Identifier;
 
-/** Draws a small off-hand recharge bar directly below the vanilla crosshair area. */
+/** Draws the Assassin off-hand recharge bar immediately above the vanilla crosshair. */
 final class AssassinOffhandCooldownHud {
     private static final long NANOS_PER_TICK = 50_000_000L;
     private static final int BAR_WIDTH = 18;
     private static final int BAR_HEIGHT = 2;
+    private static final int BAR_GAP_ABOVE_CROSSHAIR = 13;
 
     private static volatile long cooldownStartedAtNanos;
     private static volatile long cooldownDurationNanos;
@@ -56,12 +57,12 @@ final class AssassinOffhandCooldownHud {
         int centerX = client.getWindow().getGuiScaledWidth() / 2;
         int centerY = client.getWindow().getGuiScaledHeight() / 2;
         int left = centerX - BAR_WIDTH / 2;
-        int top = centerY + 12;
+        int top = centerY - BAR_GAP_ABOVE_CROSSHAIR - BAR_HEIGHT;
 
         graphics.fill(left - 1, top - 1, left + BAR_WIDTH + 1, top + BAR_HEIGHT + 1, 0xB0000000);
         graphics.fill(left, top, left + BAR_WIDTH, top + BAR_HEIGHT, 0xFF4A4A4A);
         if (fillWidth > 0) {
-            graphics.fill(left, top, left + fillWidth, top + BAR_HEIGHT, 0xFFE0B45A);
+            graphics.fill(left, top, left + fillWidth, top + BAR_HEIGHT, 0xFFFFD54F);
         }
     }
 }
