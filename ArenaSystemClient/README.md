@@ -1,61 +1,83 @@
 # ArenaSystem Client (Fabric)
 
-Fabric client module for ArenaSystem, targeting Minecraft 26.3 and Java 25.
+Client companion for ArenaSystem Paper, targeting Minecraft 26.3, Fabric Loader 0.20.1,
+Fabric API 0.166.2+26.3, and Java 25.
 
 ## Identity
 
-- Mod ID: arstm_client0qb201
-- Legacy alias: arenasystem_assassin_dagger (provided for old dependency compatibility)
-- Display name: **ArenaSystem Client**
-- Client version: **0.1.5**
+- Mod ID: `arstm_client0qb201`
+- Legacy alias: `arenasystem_assassin_dagger`
+- Version: **0.2.0**
+- Artifact: `ArenaSystem_Client-0.2.0.jar`
 
-Install only one ArenaSystem client JAR in the mods directory. Do not keep old and new JARs side by side.
+Install only one ArenaSystem client JAR in the mods directory. Do not keep old and new JARs
+side by side.
 
 ## Features
 
-- Paper companion handshake on arenasystem:mod_handshake, implementing Handshake Protocol v2.
-- Validates the 25-byte protocol header, message type, protocol version, session UUID, and exact message body sizes.
-- Performs the complete SERVER_HELLO → CLIENT_HELLO → AUTH_CHALLENGE → AUTHENTICATE → SERVER_CHALLENGE → CONNECTION_CHECK → CONNECTION_ACK exchange.
-- Uses the server-compatible HMAC-SHA256 proof format and constant-time proof comparisons.
+- Paper companion handshake on `arenasystem:mod_handshake`, preserving Handshake Protocol v2.
 - Startup update check with HTTPS GitHub release downloads and SHA-256 verification.
-- Resolves the installed client JAR by Mod ID, then stages ArenaSystem_Client-<version>.jar.
-- Windows shutdown helper with verified backup and rollback.
+- Four remappable gameplay key mappings registered under the ArenaSystem Client category.
+- Client-side checks for Paper PDC markers before sending class-skill or dagger interactions.
+- Embedded `arenasystem:assassin_dagger` item definition, model, and animated 32x128 texture.
+- A small local slash effect when a valid dagger input is attempted.
 
-The client module currently provides the handshake and updater foundation. Dagger rendering,
-animations, and input handling are not implemented in this module yet.
+The Paper plugin remains authoritative for class selection, skill availability, target validation,
+cooldowns, damage, and successful-hit feedback. The client slash particle is cosmetic feedback for
+an input attempt; it is not proof that the server accepted a hit.
+
+## Default controls
+
+Defaults are starting bindings only. Players can remap them in **Options → Controls → Key Binds**.
+
+| Default key | Action |
+|---|---|
+| G | Primary class skill (Swap Hands) |
+| H | Secondary class skill (requires Sneak or Sprint) |
+| J | Use a held class skill item |
+| K | Assassin Dagger offhand strike |
+
+Primary and secondary both send the vanilla Swap Hands action expected by Paper. The primary
+binding is suppressed while Sneak/Sprint is held so it cannot be misread by the server as a
+secondary-skill request. The secondary binding sends the same action only while a modifier is
+held.
+
+The class-skill-item binding only activates when the main-hand item carries the Paper marker
+`arenasystem:class_skill`. The dagger binding requires a Golden Sword carrying
+`arenasystem:assassin_blade` in both hands. It uses the main-hand right-click interaction because
+ArenaSystem Paper 0.2.8.9 listens for that interaction and performs the offhand swing itself.
+
+## Embedded dagger resources
+
+The dagger resources live under `src/main/resources/assets/arenasystem/`; they are part of the mod
+JAR and are not a separately selectable resource pack. The texture animation contains four 32x32
+frames stacked vertically. To regenerate it from the original 32x32 resource-pack texture:
+
+```bash
+python tools/generate_dagger_animation.py path/to/assassin_dagger.png src/main/resources/assets/arenasystem/textures/item/assassin_dagger.png
+```
+
+Pillow is needed only to regenerate the PNG and is not a Gradle or runtime dependency.
 
 ## Build
 
 Requires JDK 25 and Gradle 9.8.0.
 
-Run: gradle --no-daemon clean build
+Run from this directory:
 
-Output: build/libs/ArenaSystem_Client-<version>.jar.
+```bash
+gradle --no-daemon clean build
+```
 
-Fabric API is a required runtime dependency. The build compiles against Fabric API
-0.166.2+26.3, and the mod declares fabric-api as a required dependency.
+Output: `build/libs/ArenaSystem_Client-0.2.0.jar`.
 
-The CI workflow also compiles and runs the standalone binary protocol tests, including fixed
-HMAC-SHA256 test vectors for all four proof purposes. These tests validate the binary protocol
-implementation; they do not replace a live Paper/Fabric integration test.
+The CI workflow also compiles and runs standalone binary protocol tests, including fixed
+HMAC-SHA256 test vectors. Those tests do not replace an in-game Paper/Fabric integration test.
 
-## Updates and old-client compatibility
+## Updates and compatibility
 
-New clients read arstm-client0qb201-update-manifest.json. Installed v0.1.0/v0.1.1 clients
-continue reading assassin-client-update-manifest.json. Each new release publishes identical
-verified client bytes under both ArenaSystem_Client-<version>.jar and the old
-arenasystem-assassin-dagger-client.jar asset name. The legacy manifest retains the old Mod ID
-and URL. The new JAR declares the old ID via Fabric's provides metadata.
+The Handshake Protocol v2 implementation and updater implementation remain unchanged. The updater
+still reads the repository's existing manifest and release layout. Automatic replacement is
+Windows-only; other operating systems require manual installation of the verified staged JAR.
 
-The helper is published under both its new and old asset names. The release tag prefix
-assassin-client-v is retained only because old updaters validate that URL layout.
-
-Automatic replacement is Windows-only; other operating systems require manual installation of
-the verified staged JAR. The updater does not update the Paper server plugin.
-
-## Windows update flow
-
-The client checks its manifest at startup, verifies Mod ID, loader, Minecraft version, HTTPS URL,
-and SHA-256, then discovers its installed JAR by Mod ID. It stages
-mods/ArenaSystem_Client-<version>.jar.pending. The helper waits for Minecraft to exit, backs up
-the old JAR, verifies the new JAR, and only then removes the old one.
+The updater does not update the Paper server plugin.

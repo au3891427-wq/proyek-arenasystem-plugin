@@ -17,6 +17,7 @@ public final class ArenaSystemClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         CompanionHandshakeClient.initialize();
+        ArenaSystemKeybinds.initialize();
         CompletableFuture.runAsync(() -> {
             try {
                 UpdateService.checkAndStage(FabricLoader.getInstance());
