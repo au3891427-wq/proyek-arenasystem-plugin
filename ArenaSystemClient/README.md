@@ -7,8 +7,8 @@ Fabric API 0.166.2+26.3, and Java 25.
 
 - Mod ID: `arstm_client0qb201`
 - Legacy alias: `arenasystem_assassin_dagger`
-- Version: **0.2.0**
-- Artifact: `ArenaSystem_Client-0.2.0.jar`
+- Version: **0.2.3**
+- Artifact: `ArenaSystem_Client-0.2.3.jar`
 
 Install only one ArenaSystem client JAR in the mods directory. Do not keep old and new JARs
 side by side.
@@ -17,14 +17,15 @@ side by side.
 
 - Paper companion handshake on `arenasystem:mod_handshake`, preserving Handshake Protocol v2.
 - Startup update check with HTTPS GitHub release downloads and SHA-256 verification.
-- Four remappable gameplay key mappings registered under the ArenaSystem Client category.
-- Client-side checks for Paper PDC markers before sending class-skill or dagger interactions.
-- Embedded `arenasystem:assassin_dagger` item definition, model, and animated 32x128 texture.
-- A small local slash effect when a valid dagger input is attempted.
+- Three remappable gameplay key mappings: primary skill, secondary skill, and held class-skill item.
+- Client-side checks for Paper PDC markers before using a held class-skill item.
+- Embedded `arenasystem:assassin_dagger` item definition, model, and animated texture.
+- Receives the server-authoritative Assassin off-hand cooldown and draws its yellow recharge bar
+  **above the crosshair**, separate from the vanilla main-hand attack indicator below it.
 
 The Paper plugin remains authoritative for class selection, skill availability, target validation,
-cooldowns, damage, and successful-hit feedback. The client slash particle is cosmetic feedback for
-an input attempt; it is not proof that the server accepted a hit.
+cooldowns, damage, and successful-hit feedback. The off-hand cooldown display starts only after the
+server sends its cooldown payload; the client does not decide whether a sweep or hit is valid.
 
 ## Default controls
 
@@ -32,32 +33,17 @@ Defaults are starting bindings only. Players can remap them in **Options → Con
 
 | Default key | Action |
 |---|---|
-| G | Primary class skill (Swap Hands) |
-| H | Secondary class skill (requires Sneak or Sprint) |
-| J | Use a held class skill item |
-| K | Assassin Dagger offhand strike |
+| G | Primary class skill |
+| H | Secondary class skill |
+| J | Use a held class-skill item |
 
-Primary and secondary both send the vanilla Swap Hands action expected by Paper. The primary
-binding is suppressed while Sneak/Sprint is held so it cannot be misread by the server as a
-secondary-skill request. The secondary binding sends the same action only while a modifier is
-held.
-
-The class-skill-item binding only activates when the main-hand item carries the Paper marker
-`arenasystem:class_skill`. The dagger binding requires a Golden Sword carrying
-`arenasystem:assassin_blade` in both hands. It uses the main-hand right-click interaction because
-ArenaSystem Paper 0.2.8.9 listens for that interaction and performs the offhand swing itself.
+Assassin's off-hand blade has no standalone key mapping. It activates only when the Paper server
+confirms a real main-hand sweep and both hands contain valid Assassin blades.
 
 ## Embedded dagger resources
 
 The dagger resources live under `src/main/resources/assets/arenasystem/`; they are part of the mod
-JAR and are not a separately selectable resource pack. The texture animation contains four 32x32
-frames stacked vertically. To regenerate it from the original 32x32 resource-pack texture:
-
-```bash
-python tools/generate_dagger_animation.py path/to/assassin_dagger.png src/main/resources/assets/arenasystem/textures/item/assassin_dagger.png
-```
-
-Pillow is needed only to regenerate the PNG and is not a Gradle or runtime dependency.
+JAR and are not a separately selectable resource pack.
 
 ## Build
 
@@ -69,15 +55,15 @@ Run from this directory:
 gradle --no-daemon clean build
 ```
 
-Output: `build/libs/ArenaSystem_Client-0.2.0.jar`.
+Output: `build/libs/ArenaSystem_Client-0.2.3.jar`.
 
-The CI workflow also compiles and runs standalone binary protocol tests, including fixed
-HMAC-SHA256 test vectors. Those tests do not replace an in-game Paper/Fabric integration test.
+The CI workflow compiles the mod and runs the existing standalone handshake and class-skill input
+protocol tests. These tests do not replace a live Paper/Fabric integration test.
 
 ## Updates and compatibility
 
-The Handshake Protocol v2 implementation and updater implementation remain unchanged. The updater
-still reads the repository's existing manifest and release layout. Automatic replacement is
-Windows-only; other operating systems require manual installation of the verified staged JAR.
+Handshake Protocol v2 and the updater implementation remain unchanged. The updater still reads
+the repository's existing manifest and release layout. Automatic replacement is Windows-only;
+other operating systems require manual installation of the verified staged JAR.
 
 The updater does not update the Paper server plugin.

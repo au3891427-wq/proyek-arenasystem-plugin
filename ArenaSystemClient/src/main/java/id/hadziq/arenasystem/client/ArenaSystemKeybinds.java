@@ -7,22 +7,17 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.nbt.ByteTag;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
-import net.minecraft.world.phys.EntityHitResult;
 
 final class ArenaSystemKeybinds {
     private static final String MOD_ID = "arstm_client0qb201";
     private static final String CLASS_SKILL_MARKER = "arenasystem:class_skill";
-    private static final String ASSASSIN_BLADE_MARKER = "arenasystem:assassin_blade";
     private static final long INPUT_DEBOUNCE_NANOS = 120_000_000L;
 
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
@@ -31,17 +26,14 @@ final class ArenaSystemKeybinds {
     private static KeyMapping primarySkillKey;
     private static KeyMapping secondarySkillKey;
     private static KeyMapping classSkillItemKey;
-    private static KeyMapping daggerOffhandStrikeKey;
 
     private static boolean primaryWasDown;
     private static boolean secondaryWasDown;
     private static boolean classSkillItemWasDown;
-    private static boolean daggerWasDown;
 
     private static long lastPrimaryInput;
     private static long lastSecondaryInput;
     private static long lastClassSkillItemInput;
-    private static long lastDaggerInput;
 
     private static boolean initialized;
 
@@ -60,8 +52,6 @@ final class ArenaSystemKeybinds {
                 "key.arstm_client0qb201.secondary_skill", InputConstants.KEY_H);
         classSkillItemKey = register(
                 "key.arstm_client0qb201.class_skill_item", InputConstants.KEY_J);
-        daggerOffhandStrikeKey = register(
-                "key.arstm_client0qb201.dagger_offhand_strike", InputConstants.KEY_K);
 
         ClientTickEvents.END_CLIENT_TICK.register(ArenaSystemKeybinds::onEndClientTick);
     }
@@ -78,17 +68,14 @@ final class ArenaSystemKeybinds {
         boolean primaryDown = primarySkillKey.isDown();
         boolean secondaryDown = secondarySkillKey.isDown();
         boolean classSkillItemDown = classSkillItemKey.isDown();
-        boolean daggerDown = daggerOffhandStrikeKey.isDown();
 
         boolean primaryPressed = primaryDown && !primaryWasDown;
         boolean secondaryPressed = secondaryDown && !secondaryWasDown;
         boolean classSkillItemPressed = classSkillItemDown && !classSkillItemWasDown;
-        boolean daggerPressed = daggerDown && !daggerWasDown;
 
         primaryWasDown = primaryDown;
         secondaryWasDown = secondaryDown;
         classSkillItemWasDown = classSkillItemDown;
-        daggerWasDown = daggerDown;
 
         if (client.gui.screen() != null) {
             return;
@@ -102,8 +89,7 @@ final class ArenaSystemKeybinds {
 
         int pressedCount = (primaryPressed ? 1 : 0)
                 + (secondaryPressed ? 1 : 0)
-                + (classSkillItemPressed ? 1 : 0)
-                + (daggerPressed ? 1 : 0);
+                + (classSkillItemPressed ? 1 : 0);
         if (pressedCount != 1) {
             return;
         }
@@ -118,9 +104,6 @@ final class ArenaSystemKeybinds {
         } else if (classSkillItemPressed && isDebounceReady(now, lastClassSkillItemInput)) {
             lastClassSkillItemInput = now;
             triggerClassSkillItem(client, player);
-        } else if (daggerPressed && isDebounceReady(now, lastDaggerInput)) {
-            lastDaggerInput = now;
-            triggerDaggerStrike(client, player);
         }
     }
 
@@ -138,34 +121,13 @@ final class ArenaSystemKeybinds {
 
     private static void triggerClassSkillItem(Minecraft client, LocalPlayer player) {
         ItemStack mainHand = player.getMainHandItem();
-        if (!hasPersistentMarker(mainHand, CLASS_SKILL_MARKER, Tag.TAG_STRING)) {
+        if (!hasPersistentMarker(mainHand, CLASS_SKILL_MARKER)) {
             return;
         }
         client.gameMode.useItem(player, InteractionHand.MAIN_HAND);
     }
 
-    private static void triggerDaggerStrike(Minecraft client, LocalPlayer player) {
-        if (!isAssassinBlade(player.getMainHandItem())
-                || !isAssassinBlade(player.getOffhandItem())) {
-            return;
-        }
-
-        if (client.hitResult instanceof EntityHitResult hitResult
-                && hitResult.getEntity() instanceof Player target && target != player) {
-            client.gameMode.interact(player, target, hitResult, InteractionHand.MAIN_HAND);
-        } else {
-            client.gameMode.useItem(player, InteractionHand.MAIN_HAND);
-        }
-        DaggerVisualEffects.playAttemptEffect(client, player);
-    }
-
-    private static boolean isAssassinBlade(ItemStack stack) {
-        return !stack.isEmpty()
-                && stack.is(Items.GOLDEN_SWORD)
-                && hasPersistentMarker(stack, ASSASSIN_BLADE_MARKER, Tag.TAG_BYTE);
-    }
-
-    private static boolean hasPersistentMarker(ItemStack stack, String marker, int tagType) {
+    private static boolean hasPersistentMarker(ItemStack stack, String marker) {
         if (stack.isEmpty()) {
             return false;
         }
@@ -180,13 +142,6 @@ final class ArenaSystemKeybinds {
         if (!(rawValues instanceof CompoundTag bukkitValues)) {
             return false;
         }
-        Tag markerValue = bukkitValues.get(marker);
-        if (tagType == Tag.TAG_BYTE) {
-            return markerValue instanceof ByteTag;
-        }
-        if (tagType == Tag.TAG_STRING) {
-            return markerValue instanceof StringTag;
-        }
-        return false;
+        return bukkitValues.get(marker) instanceof StringTag;
     }
 }
