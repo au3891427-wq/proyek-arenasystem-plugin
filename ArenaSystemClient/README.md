@@ -7,8 +7,8 @@ Fabric API 0.166.2+26.3, and Java 25.
 
 - Mod ID: `arstm_client0qb201`
 - Legacy alias: `arenasystem_assassin_dagger`
-- Version: **0.2.2**
-- Artifact: `ArenaSystem_Client-0.2.2.jar`
+- Version: **0.2.3**
+- Artifact: `ArenaSystem_Client-0.2.3.jar`
 
 Install only one ArenaSystem client JAR in the mods directory. Do not keep old and new JARs
 side by side.
@@ -20,8 +20,8 @@ side by side.
 - Three remappable gameplay key mappings: primary skill, secondary skill, and held class-skill item.
 - Client-side checks for Paper PDC markers before using a held class-skill item.
 - Embedded `arenasystem:assassin_dagger` item definition, model, and animated texture.
-- Receives the server-authoritative Assassin off-hand cooldown and draws a separate recharge bar
-  below the crosshair.
+- Receives the server-authoritative Assassin off-hand cooldown and draws its yellow recharge bar
+  **above the crosshair**, separate from the vanilla main-hand attack indicator below it.
 
 The Paper plugin remains authoritative for class selection, skill availability, target validation,
 cooldowns, damage, and successful-hit feedback. The off-hand cooldown display starts only after the
@@ -37,8 +37,8 @@ Defaults are starting bindings only. Players can remap them in **Options → Con
 | H | Secondary class skill |
 | J | Use a held class-skill item |
 
-Assassin's off-hand blade no longer has a standalone key mapping. It is intended to activate only
-when the Paper server confirms a real main-hand sweep and both hands contain valid Assassin blades.
+Assassin's off-hand blade has no standalone key mapping. It activates only when the Paper server
+confirms a real main-hand sweep and both hands contain valid Assassin blades.
 
 ## Embedded dagger resources
 
@@ -55,7 +55,7 @@ Run from this directory:
 gradle --no-daemon clean build
 ```
 
-Output: `build/libs/ArenaSystem_Client-0.2.2.jar`.
+Output: `build/libs/ArenaSystem_Client-0.2.3.jar`.
 
 The CI workflow compiles the mod and runs the existing standalone handshake and class-skill input
 protocol tests. These tests do not replace a live Paper/Fabric integration test.
