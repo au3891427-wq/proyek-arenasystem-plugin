@@ -9,7 +9,9 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.ByteTag;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.resources.Identifier;
@@ -18,6 +20,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.phys.EntityHitResult;
 
 final class ArenaSystemKeybinds {
     private static final String MOD_ID = "arstm_client0qb201";
@@ -90,7 +93,7 @@ final class ArenaSystemKeybinds {
         classSkillItemWasDown = classSkillItemDown;
         daggerWasDown = daggerDown;
 
-        if (client.screen != null) {
+        if (client.gui.screen() != null) {
             return;
         }
 
@@ -173,8 +176,9 @@ final class ArenaSystemKeybinds {
             return;
         }
 
-        if (client.crosshairPickEntity instanceof Player target && target != player) {
-            client.gameMode.interact(player, target, InteractionHand.MAIN_HAND);
+        if (client.hitResult instanceof EntityHitResult hitResult
+                && hitResult.getEntity() instanceof Player target && target != player) {
+            client.gameMode.interact(player, target, hitResult, InteractionHand.MAIN_HAND);
         } else {
             client.gameMode.useItem(player, InteractionHand.MAIN_HAND);
         }
@@ -202,6 +206,13 @@ final class ArenaSystemKeybinds {
         if (!(rawValues instanceof CompoundTag bukkitValues)) {
             return false;
         }
-        return bukkitValues.contains(marker, tagType);
+        Tag markerValue = bukkitValues.get(marker);
+        if (tagType == Tag.TAG_BYTE) {
+            return markerValue instanceof ByteTag;
+        }
+        if (tagType == Tag.TAG_STRING) {
+            return markerValue instanceof StringTag;
+        }
+        return false;
     }
 }
