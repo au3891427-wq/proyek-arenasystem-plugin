@@ -5,14 +5,19 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 
 /** Draws the Assassin off-hand recharge bar immediately above the vanilla crosshair. */
 final class AssassinOffhandCooldownHud {
     private static final long NANOS_PER_TICK = 50_000_000L;
-    private static final int BAR_WIDTH = 18;
-    private static final int BAR_HEIGHT = 2;
-    private static final int BAR_GAP_ABOVE_CROSSHAIR = 13;
+    private static final int INDICATOR_SIZE = 18;
+    private static final int INDICATOR_GAP_ABOVE_CROSSHAIR = 2;
+    private static final int PROGRESS_COLOR = 0xFFFFD54F;
+    private static final Identifier INDICATOR_BACKGROUND =
+            Identifier.withDefaultNamespace("hud/hotbar_attack_indicator_background");
+    private static final Identifier INDICATOR_PROGRESS =
+            Identifier.withDefaultNamespace("hud/hotbar_attack_indicator_progress");
 
     private static volatile long cooldownStartedAtNanos;
     private static volatile long cooldownDurationNanos;
@@ -52,17 +57,34 @@ final class AssassinOffhandCooldownHud {
         }
 
         float progress = Math.max(0.0F, Math.min(1.0F, (float) elapsed / (float) duration));
-        int fillWidth = Math.round(BAR_WIDTH * progress);
+        int progressHeight = Math.round(INDICATOR_SIZE * progress);
 
         int centerX = client.getWindow().getGuiScaledWidth() / 2;
         int centerY = client.getWindow().getGuiScaledHeight() / 2;
-        int left = centerX - BAR_WIDTH / 2;
-        int top = centerY - BAR_GAP_ABOVE_CROSSHAIR - BAR_HEIGHT;
+        int left = centerX - INDICATOR_SIZE / 2;
+        int top = centerY - 7 - INDICATOR_GAP_ABOVE_CROSSHAIR - INDICATOR_SIZE;
 
-        graphics.fill(left - 1, top - 1, left + BAR_WIDTH + 1, top + BAR_HEIGHT + 1, 0xB0000000);
-        graphics.fill(left, top, left + BAR_WIDTH, top + BAR_HEIGHT, 0xFF4A4A4A);
-        if (fillWidth > 0) {
-            graphics.fill(left, top, left + fillWidth, top + BAR_HEIGHT, 0xFFFFD54F);
+        // Match the vanilla hotbar attack indicator's sword silhouette and bottom-up fill.
+        graphics.blitSprite(
+                RenderPipelines.GUI_TEXTURED,
+                INDICATOR_BACKGROUND,
+                left,
+                top,
+                INDICATOR_SIZE,
+                INDICATOR_SIZE);
+        if (progressHeight > 0) {
+            graphics.blitSprite(
+                    RenderPipelines.GUI_TEXTURED,
+                    INDICATOR_PROGRESS,
+                    INDICATOR_SIZE,
+                    INDICATOR_SIZE,
+                    0,
+                    INDICATOR_SIZE - progressHeight,
+                    left,
+                    top + INDICATOR_SIZE - progressHeight,
+                    INDICATOR_SIZE,
+                    progressHeight,
+                    PROGRESS_COLOR);
         }
     }
 }
