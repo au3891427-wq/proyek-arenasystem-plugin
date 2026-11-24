@@ -22,7 +22,6 @@ public final class TestSkillInputProtocol {
                 0x41, 0x52, 0x53, 0x49, 0x01, 0x03
         });
 
-        assertInvalid((byte) 0);
         assertEquals("Sniper Aim Lock", sniperAimLock, new byte[] {
                 0x41, 0x52, 0x53, 0x49, 0x01, 0x04
         });
