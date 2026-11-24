@@ -10,6 +10,7 @@ public final class TestSkillInputProtocol {
         byte[] primary = SkillInputProtocol.encode(SkillInputProtocol.ACTION_PRIMARY);
         byte[] secondary = SkillInputProtocol.encode(SkillInputProtocol.ACTION_SECONDARY);
         byte[] assassinOffhand = SkillInputProtocol.encode(SkillInputProtocol.ACTION_ASSASSIN_OFFHAND);
+        byte[] sniperAimLock = SkillInputProtocol.encode(SkillInputProtocol.ACTION_SNIPER_AIM_LOCK);
 
         assertEquals("primary", primary, new byte[] {
                 0x41, 0x52, 0x53, 0x49, 0x01, 0x01
@@ -22,7 +23,12 @@ public final class TestSkillInputProtocol {
         });
 
         assertInvalid((byte) 0);
-        assertInvalid((byte) 4);
+        assertEquals("Sniper Aim Lock", sniperAimLock, new byte[] {
+                0x41, 0x52, 0x53, 0x49, 0x01, 0x04
+        });
+
+        assertInvalid((byte) 0);
+        assertInvalid((byte) 5);
         System.out.println("ArenaSystem skill input protocol tests passed.");
     }
 
