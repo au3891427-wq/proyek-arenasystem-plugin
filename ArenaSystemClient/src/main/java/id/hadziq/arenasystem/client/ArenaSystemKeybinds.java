@@ -14,10 +14,12 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
+import org.lwjgl.glfw.GLFW;
 
 final class ArenaSystemKeybinds {
     private static final String MOD_ID = "arstm_client0qb201";
     private static final String CLASS_SKILL_MARKER = "arenasystem:class_skill";
+    private static final String ASSASSIN_BLADE_MARKER = "arenasystem:assassin_blade";
     private static final long INPUT_DEBOUNCE_NANOS = 120_000_000L;
 
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
@@ -26,10 +28,7 @@ final class ArenaSystemKeybinds {
     private static KeyMapping primarySkillKey;
     private static KeyMapping secondarySkillKey;
     private static KeyMapping classSkillItemKey;
-
-    private static boolean primaryWasDown;
-    private static boolean secondaryWasDown;
-    private static boolean classSkillItemWasDown;
+    private static KeyMapping assassinOffhandClickKey;
 
     private static long lastPrimaryInput;
     private static long lastSecondaryInput;
@@ -46,17 +45,22 @@ final class ArenaSystemKeybinds {
         }
         initialized = true;
 
-        primarySkillKey = register(
+        primarySkillKey = registerKeyboard(
                 "key.arstm_client0qb201.primary_skill", InputConstants.KEY_G);
-        secondarySkillKey = register(
+        secondarySkillKey = registerKeyboard(
                 "key.arstm_client0qb201.secondary_skill", InputConstants.KEY_H);
-        classSkillItemKey = register(
+        classSkillItemKey = registerKeyboard(
                 "key.arstm_client0qb201.class_skill_item", InputConstants.KEY_J);
+        assassinOffhandClickKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.arstm_client0qb201.assassin_offhand",
+                InputConstants.Type.MOUSE,
+                GLFW.GLFW_MOUSE_BUTTON_RIGHT,
+                CATEGORY));
 
         ClientTickEvents.END_CLIENT_TICK.register(ArenaSystemKeybinds::onEndClientTick);
     }
 
-    private static KeyMapping register(String translationKey, int defaultKey) {
+    private static KeyMapping registerKeyboard(String translationKey, int defaultKey) {
         return KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 translationKey,
                 InputConstants.Type.KEYBOARD,
@@ -65,17 +69,12 @@ final class ArenaSystemKeybinds {
     }
 
     private static void onEndClientTick(Minecraft client) {
-        boolean primaryDown = primarySkillKey.isDown();
-        boolean secondaryDown = secondarySkillKey.isDown();
-        boolean classSkillItemDown = classSkillItemKey.isDown();
-
-        boolean primaryPressed = primaryDown && !primaryWasDown;
-        boolean secondaryPressed = secondaryDown && !secondaryWasDown;
-        boolean classSkillItemPressed = classSkillItemDown && !classSkillItemWasDown;
-
-        primaryWasDown = primaryDown;
-        secondaryWasDown = secondaryDown;
-        classSkillItemWasDown = classSkillItemDown;
+        // consumeClick() consumes discrete press events, not the held state.
+        // This keeps all gameplay input detection on the Fabric client and avoids hold-repeat.
+        boolean primaryPressed = primarySkillKey.consumeClick();
+        boolean secondaryPressed = secondarySkillKey.consumeClick();
+        boolean classSkillItemPressed = classSkillItemKey.consumeClick();
+        boolean assassinOffhandClicked = assassinOffhandClickKey.consumeClick();
 
         if (client.gui.screen() != null) {
             return;
@@ -85,6 +84,10 @@ final class ArenaSystemKeybinds {
         if (player == null || client.level == null || client.gameMode == null
                 || !player.isAlive() || player.isSpectator()) {
             return;
+        }
+
+        if (assassinOffhandClicked && hasAssassinBlades(player)) {
+            SkillInputClient.send(SkillInputProtocol.ACTION_ASSASSIN_OFFHAND);
         }
 
         int pressedCount = (primaryPressed ? 1 : 0)
@@ -125,6 +128,11 @@ final class ArenaSystemKeybinds {
             return;
         }
         client.gameMode.useItem(player, InteractionHand.MAIN_HAND);
+    }
+
+    private static boolean hasAssassinBlades(LocalPlayer player) {
+        return hasPersistentMarker(player.getMainHandItem(), ASSASSIN_BLADE_MARKER)
+                && hasPersistentMarker(player.getOffhandItem(), ASSASSIN_BLADE_MARKER);
     }
 
     private static boolean hasPersistentMarker(ItemStack stack, String marker) {
