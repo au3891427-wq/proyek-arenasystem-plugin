@@ -1,6 +1,6 @@
 # Client Skill Keybind Chords Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add Shift/Alt/Ctrl chord detection to the existing Fabric client keybinds without changing the server protocol.
 
@@ -39,11 +39,11 @@
 **Interfaces:**
 - Produces constants `SHIFT`, `ALT`, `CONTROL` and method `matchesExactly(int activeModifiers, int requiredModifiers)`.
 
-- [ ] **Step 1: Write the failing test** in `TestKeybindModifierMatcher.java`. Assert that each required modifier matches itself; no modifier, a different modifier, and a combination containing extra modifier bits do not match.
-- [ ] **Step 2: Run the test before adding the production class.** Expected: compilation fails because `KeybindModifierMatcher` does not exist. This was observed with javac before implementation.
-- [ ] **Step 3: Implement the minimal matcher** with bit constants SHIFT=1, ALT=2, CONTROL=4 and exact integer equality.
-- [ ] **Step 4: Run the test.** Compile both source files with javac, then run `id.hadziq.arenasystem.client.TestKeybindModifierMatcher`. Expected: pass.
-- [ ] **Step 5: Commit** the matcher and its standalone test.
+- [x] **Step 1: Write the failing test** in `TestKeybindModifierMatcher.java`. Assert that each required modifier matches itself; no modifier, a different modifier, and a combination containing extra modifier bits do not match.
+- [x] **Step 2: Run the test before adding the production class.** Expected: compilation fails because `KeybindModifierMatcher` does not exist. This was observed with javac before implementation.
+- [x] **Step 3: Implement the minimal matcher** with bit constants SHIFT=1, ALT=2, CONTROL=4 and exact integer equality.
+- [x] **Step 4: Run the test.** Compile both source files with javac, then run `id.hadziq.arenasystem.client.TestKeybindModifierMatcher`. Expected: pass.
+- [x] **Step 5: Commit** the matcher and its standalone test.
 
 ### Task 2: Apply chords to client input
 
@@ -56,11 +56,11 @@
 - Consumes `KeybindModifierMatcher` constants and exact-match method from Task 1.
 - Keeps `SkillInputClient.send(byte)` and existing action IDs unchanged.
 
-- [ ] **Step 1: Read active modifier state** once per relevant client tick using `client.hasShiftDown()`, `client.hasAltDown()`, and `client.hasControlDown()`.
-- [ ] **Step 2: Gate each consumed press** with the accepted chord: Shift+G, Shift+H, Shift+J, Alt+Q, Ctrl+RMB. Filter to matching chord presses before the existing single-action guard.
-- [ ] **Step 3: Preserve existing guards** for player state, debounce, held class-skill PDC, Assassin dual-blade PDC, and existing off-hand suppression.
-- [ ] **Step 4: Update key descriptions** to disclose the required modifier without hardcoding the base key, since the base KeyMapping remains remappable.
-- [ ] **Step 5: Verify** source diff and ensure only the intended keybind gates and descriptions changed.
+- [x] **Step 1: Read active modifier state** once per relevant client tick using `client.hasShiftDown()`, `client.hasAltDown()`, and `client.hasControlDown()`.
+- [x] **Step 2: Gate each consumed press** with the accepted chord: Shift+G, Shift+H, Shift+J, Alt+Q, Ctrl+RMB. Filter to matching chord presses before the existing single-action guard.
+- [x] **Step 3: Preserve existing guards** for player state, debounce, held class-skill PDC, Assassin dual-blade PDC, and existing off-hand suppression.
+- [x] **Step 4: Update key descriptions** to disclose the required modifier without hardcoding the base key, since the base KeyMapping remains remappable.
+- [x] **Step 5: Verify** source diff and ensure only the intended keybind gates and descriptions changed.
 
 ### Task 3: Update client version, documentation, and CI test
 
@@ -69,9 +69,9 @@
 - Modify: `ArenaSystemClient/README.md`
 - Modify: `.github/workflows/build-arenasystem-client.yml`
 
-- [ ] **Step 1: Bump** `mod_version` from 0.2.8 to 0.2.9.
-- [ ] **Step 2: Update README controls** to list all five default chords and clarify that each action's modifier is fixed while the base KeyMapping remains remappable.
-- [ ] **Step 3: Add a CI standalone Java test step** for `KeybindModifierMatcher`, following the existing protocol-test pattern.
-- [ ] **Step 4: Run local standalone test and attempt the full client build.** Full build command: `gradle --no-daemon clean build` from `ArenaSystemClient`, with Java 25 and Gradle 9.8.0.
-- [ ] **Step 5: Verify** the final diff and CI result. If the environment lacks the required toolchain, report that limitation rather than claiming a full build passed.
-- [ ] **Step 6: Commit** the remaining client implementation and documentation changes.
+- [x] **Step 1: Bump** `mod_version` from 0.2.8 to 0.2.9.
+- [x] **Step 2: Update README controls** to list all five default chords and clarify that each action's modifier is fixed while the base KeyMapping remains remappable.
+- [x] **Step 3: Add a CI standalone Java test step** for `KeybindModifierMatcher`, following the existing protocol-test pattern.
+- [x] **Step 4: Run local standalone test and attempt the full client build.** Full build command: `gradle --no-daemon clean build` from `ArenaSystemClient`, with Java 25 and Gradle 9.8.0.
+- [x] **Step 5: Verify** the final diff and CI result. If the environment lacks the required toolchain, report that limitation rather than claiming a full build passed.
+- [x] **Step 6: Commit** the remaining client implementation and documentation changes.
