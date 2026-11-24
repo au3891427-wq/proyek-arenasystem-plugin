@@ -7,8 +7,8 @@ Fabric API 0.166.2+26.3, and Java 25.
 
 - Mod ID: `arstm_client0qb201`
 - Legacy alias: `arenasystem_assassin_dagger`
-- Version: **0.2.3**
-- Artifact: `ArenaSystem_Client-0.2.3.jar`
+- Version: **0.2.4**
+- Artifact: `ArenaSystem_Client-0.2.4.jar`
 
 Install only one ArenaSystem client JAR in the mods directory. Do not keep old and new JARs
 side by side.
@@ -55,7 +55,7 @@ Run from this directory:
 gradle --no-daemon clean build
 ```
 
-Output: `build/libs/ArenaSystem_Client-0.2.3.jar`.
+Output: `build/libs/ArenaSystem_Client-0.2.4.jar`.
 
 The CI workflow compiles the mod and runs the existing standalone handshake and class-skill input
 protocol tests. These tests do not replace a live Paper/Fabric integration test.
