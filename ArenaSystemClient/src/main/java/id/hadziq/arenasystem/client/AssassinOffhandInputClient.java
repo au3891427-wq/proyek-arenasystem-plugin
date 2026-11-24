@@ -13,8 +13,11 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 
 /**
- * Converts genuine air/entity right-click interactions into server-authoritative
- * Assassin off-hand input. Block interactions are not intercepted.
+ * Suppresses vanilla main-hand item/entity use while dual Assassin blades are equipped.
+ *
+ * The actual off-hand attack is sent once per right-mouse press by the client key mapping.
+ * These callbacks must not send skill packets because vanilla use callbacks can be invoked
+ * independently of the physical button's initial press.
  */
 final class AssassinOffhandInputClient {
     private static final String ASSASSIN_BLADE_MARKER = "arenasystem:assassin_blade";
@@ -39,8 +42,7 @@ final class AssassinOffhandInputClient {
                 return InteractionResult.PASS;
             }
 
-            SkillInputClient.send(SkillInputProtocol.ACTION_ASSASSIN_OFFHAND);
-            // The custom plugin message replaces vanilla item-use processing for this dagger action.
+            // The custom client input packet replaces vanilla main-hand item use.
             return InteractionResult.FAIL;
         });
 
@@ -55,8 +57,7 @@ final class AssassinOffhandInputClient {
                 return InteractionResult.PASS;
             }
 
-            SkillInputClient.send(SkillInputProtocol.ACTION_ASSASSIN_OFFHAND);
-            // Prevent a second vanilla entity-interaction packet for the same click.
+            // Prevent a vanilla entity-interaction packet for the custom dagger click.
             return InteractionResult.FAIL;
         });
     }
