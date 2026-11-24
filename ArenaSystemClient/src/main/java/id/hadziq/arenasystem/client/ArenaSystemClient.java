@@ -19,6 +19,7 @@ public final class ArenaSystemClient implements ClientModInitializer {
         CompanionHandshakeClient.initialize();
         SkillInputClient.initialize();
         AssassinOffhandCooldownClient.initialize();
+        AssassinOffhandInputClient.initialize();
         ArenaSystemKeybinds.initialize();
         CompletableFuture.runAsync(() -> {
             try {
