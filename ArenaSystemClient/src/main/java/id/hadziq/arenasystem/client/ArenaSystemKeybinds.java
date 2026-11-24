@@ -88,33 +88,65 @@ final class ArenaSystemKeybinds {
             return;
         }
 
-        if (assassinOffhandClicked && hasAssassinBlades(player)) {
+        if (!primaryPressed && !secondaryPressed && !classSkillItemPressed
+                && !assassinOffhandClicked && !sniperAimLockPressed) {
+            return;
+        }
+
+        int activeModifiers = readActiveModifiers(client);
+
+        if (assassinOffhandClicked
+                && KeybindModifierMatcher.matchesExactly(activeModifiers, KeybindModifierMatcher.CONTROL)
+                && hasAssassinBlades(player)) {
             SkillInputClient.send(SkillInputProtocol.ACTION_ASSASSIN_OFFHAND);
         }
 
         long now = System.nanoTime();
-        if (sniperAimLockPressed && isDebounceReady(now, lastSniperAimLockInput)) {
+        if (sniperAimLockPressed
+                && KeybindModifierMatcher.matchesExactly(activeModifiers, KeybindModifierMatcher.ALT)
+                && isDebounceReady(now, lastSniperAimLockInput)) {
             lastSniperAimLockInput = now;
             SkillInputClient.send(SkillInputProtocol.ACTION_SNIPER_AIM_LOCK);
         }
 
-        int pressedCount = (primaryPressed ? 1 : 0)
-                + (secondaryPressed ? 1 : 0)
-                + (classSkillItemPressed ? 1 : 0);
+        boolean primaryChordPressed = primaryPressed
+                && KeybindModifierMatcher.matchesExactly(activeModifiers, KeybindModifierMatcher.SHIFT);
+        boolean secondaryChordPressed = secondaryPressed
+                && KeybindModifierMatcher.matchesExactly(activeModifiers, KeybindModifierMatcher.SHIFT);
+        boolean classSkillItemChordPressed = classSkillItemPressed
+                && KeybindModifierMatcher.matchesExactly(activeModifiers, KeybindModifierMatcher.SHIFT);
+
+        int pressedCount = (primaryChordPressed ? 1 : 0)
+                + (secondaryChordPressed ? 1 : 0)
+                + (classSkillItemChordPressed ? 1 : 0);
         if (pressedCount != 1) {
             return;
         }
 
-        if (primaryPressed && isDebounceReady(now, lastPrimaryInput)) {
+        if (primaryChordPressed && isDebounceReady(now, lastPrimaryInput)) {
             lastPrimaryInput = now;
             triggerPrimarySkill();
-        } else if (secondaryPressed && isDebounceReady(now, lastSecondaryInput)) {
+        } else if (secondaryChordPressed && isDebounceReady(now, lastSecondaryInput)) {
             lastSecondaryInput = now;
             triggerSecondarySkill();
-        } else if (classSkillItemPressed && isDebounceReady(now, lastClassSkillItemInput)) {
+        } else if (classSkillItemChordPressed && isDebounceReady(now, lastClassSkillItemInput)) {
             lastClassSkillItemInput = now;
             triggerClassSkillItem(client, player);
         }
+    }
+
+    private static int readActiveModifiers(Minecraft client) {
+        int modifiers = 0;
+        if (client.hasShiftDown()) {
+            modifiers |= KeybindModifierMatcher.SHIFT;
+        }
+        if (client.hasAltDown()) {
+            modifiers |= KeybindModifierMatcher.ALT;
+        }
+        if (client.hasControlDown()) {
+            modifiers |= KeybindModifierMatcher.CONTROL;
+        }
+        return modifiers;
     }
 
     private static boolean isDebounceReady(long now, long previous) {

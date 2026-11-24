@@ -36,9 +36,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           $testDir = Join-Path $env:RUNNER_TEMP "arenasystem-handshake-test"
           New-Item -ItemType Directory -Force -Path $testDir | Out-Null
-          & javac -d $testDir `
-            "src/main/java/id/hadziq/arenasystem/client/CompanionHandshakeProtocol.java" `
-            "tools/TestCompanionHandshakeProtocol.java"
+          & javac -d $testDir "src/main/java/id/hadziq/arenasystem/client/CompanionHandshakeProtocol.java" "tools/TestCompanionHandshakeProtocol.java"
           if ($LASTEXITCODE -ne 0) { throw "Could not compile handshake protocol test." }
           & java -cp $testDir id.hadziq.arenasystem.client.TestCompanionHandshakeProtocol
           if ($LASTEXITCODE -ne 0) { throw "Handshake protocol test failed." }
@@ -50,12 +48,22 @@ jobs:
           $ErrorActionPreference = "Stop"
           $testDir = Join-Path $env:RUNNER_TEMP "arenasystem-skill-input-test"
           New-Item -ItemType Directory -Force -Path $testDir | Out-Null
-          & javac -d $testDir `
-            "src/main/java/id/hadziq/arenasystem/client/SkillInputProtocol.java" `
-            "tools/TestSkillInputProtocol.java"
+          & javac -d $testDir "src/main/java/id/hadziq/arenasystem/client/SkillInputProtocol.java" "tools/TestSkillInputProtocol.java"
           if ($LASTEXITCODE -ne 0) { throw "Could not compile skill input protocol test." }
           & java -cp $testDir id.hadziq.arenasystem.client.TestSkillInputProtocol
           if ($LASTEXITCODE -ne 0) { throw "Skill input protocol test failed." }
+
+      - name: Test skill keybind modifier matching
+        working-directory: ArenaSystemClient
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $testDir = Join-Path $env:RUNNER_TEMP "arenasystem-keybind-modifier-test"
+          New-Item -ItemType Directory -Force -Path $testDir | Out-Null
+          & javac -d $testDir "src/main/java/id/hadziq/arenasystem/client/KeybindModifierMatcher.java" "tools/TestKeybindModifierMatcher.java"
+          if ($LASTEXITCODE -ne 0) { throw "Could not compile keybind modifier test." }
+          & java -cp $testDir id.hadziq.arenasystem.client.TestKeybindModifierMatcher
+          if ($LASTEXITCODE -ne 0) { throw "Keybind modifier test failed." }
 
       - name: Upload client artifact
         uses: actions/upload-artifact@v4
