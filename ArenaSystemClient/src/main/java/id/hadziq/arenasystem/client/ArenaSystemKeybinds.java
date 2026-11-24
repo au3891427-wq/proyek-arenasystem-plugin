@@ -14,7 +14,6 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
-import org.lwjgl.glfw.GLFW;
 
 final class ArenaSystemKeybinds {
     private static final String MOD_ID = "arstm_client0qb201";
@@ -54,7 +53,7 @@ final class ArenaSystemKeybinds {
         assassinOffhandClickKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.arstm_client0qb201.assassin_offhand",
                 InputConstants.Type.MOUSE,
-                GLFW.GLFW_MOUSE_BUTTON_RIGHT,
+                InputConstants.MOUSE_BUTTON_RIGHT,
                 CATEGORY));
 
         ClientTickEvents.END_CLIENT_TICK.register(ArenaSystemKeybinds::onEndClientTick);
