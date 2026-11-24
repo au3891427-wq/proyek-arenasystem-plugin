@@ -7,8 +7,8 @@ Fabric API 0.166.2+26.3, and Java 25.
 
 - Mod ID: `arstm_client0qb201`
 - Legacy alias: `arenasystem_assassin_dagger`
-- Version: **0.2.5**
-- Artifact: `ArenaSystem_Client-0.2.5.jar`
+- Version: **0.2.6**
+- Artifact: `ArenaSystem_Client-0.2.6.jar`
 
 Install only one ArenaSystem client JAR in the mods directory. Do not keep old and new JARs
 side by side.
@@ -55,7 +55,7 @@ Run from this directory:
 gradle --no-daemon clean build
 ```
 
-Output: `build/libs/ArenaSystem_Client-0.2.5.jar`.
+Output: `build/libs/ArenaSystem_Client-0.2.6.jar`.
 
 The CI workflow compiles the mod and runs the existing standalone handshake and class-skill input
 protocol tests. These tests do not replace a live Paper/Fabric integration test.
@@ -71,4 +71,4 @@ The updater does not update the Paper server plugin.
 
 ### Assassin off-hand input
 
-The Fabric client detects a fresh right-click press while the crosshair targets air or a player entity and sends action `3` through the existing `arenasystem:skill_input` protocol. It deliberately ignores block targets so vanilla chest, door and other block interactions remain unchanged. The Paper plugin validates class, match, equipment, target and cooldown, then performs the strike and sends the cooldown to the client HUD.
+The Fabric client uses `UseItemCallback` for air and `UseEntityCallback` for player targets, then sends action `3` through the existing `arenasystem:skill_input` protocol. It does not register a block-use callback, so vanilla chest, door, button and other block interactions remain unchanged. The client first checks the ArenaSystem dagger marker in both hands; the Paper plugin independently validates class, match, equipment, target and cooldown, then performs the strike and sends the cooldown to the client HUD.
