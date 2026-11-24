@@ -71,4 +71,4 @@ The updater does not update the Paper server plugin.
 
 ### Assassin off-hand input
 
-The Fabric client detects a right-click press while the crosshair targets air or a player entity and sends action `3` through the existing `arenasystem:skill_input` protocol. It deliberately ignores block targets so vanilla chest, door and other block interactions remain unchanged. The Paper plugin remains authoritative for every validation, strike, damage and cooldown decision.
+The Fabric client detects a fresh right-click press while the crosshair targets air or a player entity and sends action `3` through the existing `arenasystem:skill_input` protocol. It deliberately ignores block targets so vanilla chest, door and other block interactions remain unchanged. The Paper plugin validates class, match, equipment, target and cooldown, then performs the strike and sends the cooldown to the client HUD.
