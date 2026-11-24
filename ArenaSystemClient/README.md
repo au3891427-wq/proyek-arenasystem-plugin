@@ -7,8 +7,8 @@ Fabric API 0.166.2+26.3, and Java 25.
 
 - Mod ID: `arstm_client0qb201`
 - Legacy alias: `arenasystem_assassin_dagger`
-- Version: **0.2.6**
-- Artifact: `ArenaSystem_Client-0.2.6.jar`
+- Version: **0.2.7**
+- Artifact: `ArenaSystem_Client-0.2.7.jar`
 
 Install only one ArenaSystem client JAR in the mods directory. Do not keep old and new JARs
 side by side.
@@ -17,28 +17,35 @@ side by side.
 
 - Paper companion handshake on `arenasystem:mod_handshake`, preserving Handshake Protocol v2.
 - Startup update check with HTTPS GitHub release downloads and SHA-256 verification.
-- Three remappable gameplay key mappings: primary skill, secondary skill, and held class-skill item.
+- Client-side discrete input detection for primary and secondary class skills.
 - Client-side checks for Paper PDC markers before using a held class-skill item.
+- Right-mouse click mapping for the Assassin off-hand attack; held-button state does not repeat it.
 - Embedded `arenasystem:assassin_dagger` item definition, model, and animated texture.
 - Receives the server-authoritative Assassin off-hand cooldown and draws its yellow recharge bar
   **above the crosshair**, separate from the vanilla main-hand attack indicator below it.
 
-The Paper plugin remains authoritative for class selection, skill availability, target validation,
-cooldowns, damage, and successful-hit feedback. The off-hand cooldown display starts only after the
-server sends its cooldown payload; the client does not decide whether a sweep or hit is valid.
+The Fabric client detects physical key/mouse presses and sends explicit action packets. The Paper
+plugin remains authoritative for class selection, skill availability, target validation, cooldowns,
+damage, and successful-hit feedback. The client does not decide whether a skill or hit is valid.
 
 ## Default controls
 
-Defaults are starting bindings only. Players can remap them in **Options → Controls → Key Binds**.
+Defaults are starting bindings. Players can remap them in **Options → Controls → Key Binds**.
 
-| Default key | Action |
+| Default input | Action |
 |---|---|
 | G | Primary class skill |
 | H | Secondary class skill |
 | J | Use a held class-skill item |
+| Right Mouse Button | Assassin off-hand attack, when both hands hold valid Assassin blades |
 
-Assassin's off-hand blade has no standalone key mapping. It activates only when the Paper server
-confirms a real main-hand sweep and both hands contain valid Assassin blades.
+Primary/secondary skills and the off-hand attack are detected on the Fabric client with queued
+press events. Holding a key or mouse button does not create repeated input events. The Paper server
+receives the action packet and executes the validated ability.
+
+The off-hand input requires the ArenaSystem dagger marker in both hands. Vanilla main-hand
+item/entity use is suppressed for that paired-blade action to avoid sending a second interaction.
+Block-use callbacks are not intercepted.
 
 ## Embedded dagger resources
 
@@ -55,7 +62,7 @@ Run from this directory:
 gradle --no-daemon clean build
 ```
 
-Output: `build/libs/ArenaSystem_Client-0.2.6.jar`.
+Output: `build/libs/ArenaSystem_Client-0.2.7.jar`.
 
 The CI workflow compiles the mod and runs the existing standalone handshake and class-skill input
 protocol tests. These tests do not replace a live Paper/Fabric integration test.
@@ -67,8 +74,3 @@ the repository's existing manifest and release layout. Automatic replacement is 
 other operating systems require manual installation of the verified staged JAR.
 
 The updater does not update the Paper server plugin.
-
-
-### Assassin off-hand input
-
-The Fabric client uses `UseItemCallback` for air and `UseEntityCallback` for player targets, then sends action `3` through the existing `arenasystem:skill_input` protocol. It does not register a block-use callback, so vanilla chest, door, button and other block interactions remain unchanged. The client first checks the ArenaSystem dagger marker in both hands; the Paper plugin independently validates class, match, equipment, target and cooldown, then performs the strike and sends the cooldown to the client HUD.
