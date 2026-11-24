@@ -9,6 +9,7 @@ public final class TestSkillInputProtocol {
     public static void main(String[] args) {
         byte[] primary = SkillInputProtocol.encode(SkillInputProtocol.ACTION_PRIMARY);
         byte[] secondary = SkillInputProtocol.encode(SkillInputProtocol.ACTION_SECONDARY);
+        byte[] assassinOffhand = SkillInputProtocol.encode(SkillInputProtocol.ACTION_ASSASSIN_OFFHAND);
 
         assertEquals("primary", primary, new byte[] {
                 0x41, 0x52, 0x53, 0x49, 0x01, 0x01
@@ -16,9 +17,12 @@ public final class TestSkillInputProtocol {
         assertEquals("secondary", secondary, new byte[] {
                 0x41, 0x52, 0x53, 0x49, 0x01, 0x02
         });
+        assertEquals("Assassin off-hand", assassinOffhand, new byte[] {
+                0x41, 0x52, 0x53, 0x49, 0x01, 0x03
+        });
 
         assertInvalid((byte) 0);
-        assertInvalid((byte) 3);
+        assertInvalid((byte) 4);
         System.out.println("ArenaSystem skill input protocol tests passed.");
     }
 
