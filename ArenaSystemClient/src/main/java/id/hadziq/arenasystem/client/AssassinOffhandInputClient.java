@@ -1,21 +1,23 @@
 package id.hadziq.arenasystem.client;
 
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.minecraft.client.Minecraft;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
+import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.EntityHitResult;
-import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 
 /**
- * Converts a real right-click press into a server-authoritative Assassin off-hand input.
- *
- * Block interactions are deliberately left to vanilla. The server still validates the
- * player's class, match, held items, target, range, team and cooldown.
+ * Converts genuine air/entity right-click interactions into server-authoritative
+ * Assassin off-hand input. Block interactions are not intercepted.
  */
 final class AssassinOffhandInputClient {
-    private static boolean useWasDown;
+    private static final String ASSASSIN_BLADE_MARKER = "arenasystem:assassin_blade";
     private static boolean initialized;
 
     private AssassinOffhandInputClient() {
@@ -26,40 +28,57 @@ final class AssassinOffhandInputClient {
             return;
         }
         initialized = true;
-        ClientTickEvents.END_CLIENT_TICK.register(AssassinOffhandInputClient::onEndClientTick);
+
+        UseItemCallback.EVENT.register((player, world, hand) -> {
+            if (hand != InteractionHand.MAIN_HAND
+                    || !world.isClientSide()
+                    || !(player instanceof LocalPlayer)
+                    || !player.isAlive()
+                    || player.isSpectator()
+                    || !hasAssassinBlades(player)) {
+                return InteractionResult.PASS;
+            }
+
+            SkillInputClient.send(SkillInputProtocol.ACTION_ASSASSIN_OFFHAND);
+            // The custom plugin message replaces vanilla item-use processing for this dagger action.
+            return InteractionResult.FAIL;
+        });
+
+        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+            if (hand != InteractionHand.MAIN_HAND
+                    || !world.isClientSide()
+                    || !(player instanceof LocalPlayer)
+                    || !(entity instanceof Player)
+                    || !player.isAlive()
+                    || player.isSpectator()
+                    || !hasAssassinBlades(player)) {
+                return InteractionResult.PASS;
+            }
+
+            SkillInputClient.send(SkillInputProtocol.ACTION_ASSASSIN_OFFHAND);
+            // Prevent a second vanilla entity-interaction packet for the same click.
+            return InteractionResult.FAIL;
+        });
     }
 
-    private static void onEndClientTick(Minecraft client) {
-        boolean useDown = client.options.keyUse.isDown();
-        boolean usePressed = useDown && !useWasDown;
-        useWasDown = useDown;
+    private static boolean hasAssassinBlades(Player player) {
+        return hasAssassinBladeMarker(player.getMainHandItem())
+                && hasAssassinBladeMarker(player.getOffhandItem());
+    }
 
-        if (!usePressed || client.gui.screen() != null) {
-            return;
+    private static boolean hasAssassinBladeMarker(ItemStack stack) {
+        if (stack.isEmpty()) {
+            return false;
         }
 
-        LocalPlayer player = client.player;
-        if (player == null || client.level == null || client.gameMode == null
-                || !player.isAlive() || player.isSpectator()) {
-            return;
+        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+        if (customData == null) {
+            return false;
         }
 
-        HitResult hitResult = client.hitResult;
-        if (hitResult instanceof BlockHitResult) {
-            return;
-        }
-
-        if (hitResult instanceof EntityHitResult entityHit
-                && !(entityHit.getEntity() instanceof Player)) {
-            return;
-        }
-
-        if (hitResult == null
-                || (hitResult.getType() != HitResult.Type.MISS
-                    && !(hitResult instanceof EntityHitResult))) {
-            return;
-        }
-
-        SkillInputClient.send(SkillInputProtocol.ACTION_ASSASSIN_OFFHAND);
+        CompoundTag root = customData.copyTag();
+        Tag rawValues = root.get("PublicBukkitValues");
+        return rawValues instanceof CompoundTag bukkitValues
+                && bukkitValues.contains(ASSASSIN_BLADE_MARKER);
     }
 }
