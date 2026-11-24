@@ -11,6 +11,7 @@ final class SkillInputProtocol {
     static final byte ACTION_PRIMARY = 1;
     static final byte ACTION_SECONDARY = 2;
     static final byte ACTION_ASSASSIN_OFFHAND = 3;
+    static final byte ACTION_SNIPER_AIM_LOCK = 4;
 
     private static final int MAGIC = 0x41525349; // "ARSI"
     private static final byte VERSION = 1;
@@ -19,7 +20,8 @@ final class SkillInputProtocol {
     }
 
     static byte[] encode(byte action) {
-        if (action != ACTION_PRIMARY && action != ACTION_SECONDARY && action != ACTION_ASSASSIN_OFFHAND) {
+        if (action != ACTION_PRIMARY && action != ACTION_SECONDARY && action != ACTION_ASSASSIN_OFFHAND
+                && action != ACTION_SNIPER_AIM_LOCK) {
             throw new IllegalArgumentException("Unknown ArenaSystem skill action: " + action);
         }
 
