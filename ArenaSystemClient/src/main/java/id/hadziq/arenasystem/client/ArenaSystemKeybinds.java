@@ -8,7 +8,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
@@ -69,7 +68,6 @@ final class ArenaSystemKeybinds {
 
     private static void onEndClientTick(Minecraft client) {
         // consumeClick() consumes discrete press events, not the held state.
-        // This keeps all gameplay input detection on the Fabric client and avoids hold-repeat.
         boolean primaryPressed = primarySkillKey.consumeClick();
         boolean secondaryPressed = secondarySkillKey.consumeClick();
         boolean classSkillItemPressed = classSkillItemKey.consumeClick();
@@ -146,9 +144,6 @@ final class ArenaSystemKeybinds {
 
         CompoundTag root = customData.copyTag();
         Tag rawValues = root.get("PublicBukkitValues");
-        if (!(rawValues instanceof CompoundTag bukkitValues)) {
-            return false;
-        }
-        return bukkitValues.get(marker) instanceof StringTag;
+        return rawValues instanceof CompoundTag bukkitValues && bukkitValues.contains(marker);
     }
 }
