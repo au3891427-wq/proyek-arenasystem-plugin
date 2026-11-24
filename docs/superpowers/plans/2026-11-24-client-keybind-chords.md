@@ -4,7 +4,7 @@
 
 **Goal:** Add Shift/Alt/Ctrl chord detection to the existing Fabric client keybinds without changing the server protocol.
 
-**Architecture:** Preserve the existing KeyMapping press events and add a small pure modifier matcher. Read left/right modifier-key state from the Minecraft window with GLFW, then gate the existing action sends by an exact modifier match.
+**Architecture:** Preserve the existing KeyMapping press events and add a small pure modifier matcher. Read modifier state through Minecraft 26.3's client helper methods, then gate the existing action sends by an exact modifier match.
 
 **Tech Stack:** Java 25, Minecraft 26.3, Fabric Loader 0.20.1, Fabric API 0.166.2+26.3, Gradle 9.8.0.
 
@@ -18,11 +18,12 @@
 - Exact modifier matching: unmodified, mismatched, or extra-modifier chords must not send the action.
 - Preserve existing debounce, PDC marker checks, and Assassin vanilla-use suppression.
 - Set client mod version to 0.2.9; do not change server version.
+- Use Minecraft.hasShiftDown(), hasAltDown(), and hasControlDown(); do not use GLFW.
 
 ## Review Focus
 
 - Base key/button pressed without its modifier: ignored; covered by matcher tests and per-action gating.
-- Left versus right modifier key: both must set the same logical modifier bit; verify both GLFW key codes in the implementation.
+- Left versus right modifier key: both must set the same logical modifier bit; Minecraft's helpers cover the left/right scan codes.
 - Wrong or additional modifier held: ignored; covered by exact-match unit tests.
 - Multiple ArenaSystem press events in one tick: retain the existing single-action guard after chord filtering.
 - Ctrl+RMB with and without Assassin blade markers: retain the existing marker check and callback suppression path; inspect that no callback starts sending a second packet.
@@ -39,7 +40,7 @@
 - Produces constants `SHIFT`, `ALT`, `CONTROL` and method `matchesExactly(int activeModifiers, int requiredModifiers)`.
 
 - [ ] **Step 1: Write the failing test** in `TestKeybindModifierMatcher.java`. Assert that each required modifier matches itself; no modifier, a different modifier, and a combination containing extra modifier bits do not match.
-- [ ] **Step 2: Run the test before adding the production class.** Run: `javac -d /tmp/arenasystem-modifier-test ArenaSystemClient/tools/TestKeybindModifierMatcher.java`. Expected: compilation fails because `KeybindModifierMatcher` does not exist.
+- [ ] **Step 2: Run the test before adding the production class.** Expected: compilation fails because `KeybindModifierMatcher` does not exist. This was observed with javac before implementation.
 - [ ] **Step 3: Implement the minimal matcher** with bit constants SHIFT=1, ALT=2, CONTROL=4 and exact integer equality.
 - [ ] **Step 4: Run the test.** Compile both source files with javac, then run `id.hadziq.arenasystem.client.TestKeybindModifierMatcher`. Expected: pass.
 - [ ] **Step 5: Commit** the matcher and its standalone test.
@@ -55,8 +56,8 @@
 - Consumes `KeybindModifierMatcher` constants and exact-match method from Task 1.
 - Keeps `SkillInputClient.send(byte)` and existing action IDs unchanged.
 
-- [ ] **Step 1: Read active modifier state** from `client.getWindow().getWindow()` using GLFW key-state checks for both left and right Shift, Alt, and Control.
-- [ ] **Step 2: Gate each consumed press** with the accepted chord: Shift+G, Shift+H, Shift+J, Alt+Q, Ctrl+RMB. Filter to matching chord presses before the existing single-action guard. Sample the modifier mask once per client tick.
+- [ ] **Step 1: Read active modifier state** once per relevant client tick using `client.hasShiftDown()`, `client.hasAltDown()`, and `client.hasControlDown()`.
+- [ ] **Step 2: Gate each consumed press** with the accepted chord: Shift+G, Shift+H, Shift+J, Alt+Q, Ctrl+RMB. Filter to matching chord presses before the existing single-action guard.
 - [ ] **Step 3: Preserve existing guards** for player state, debounce, held class-skill PDC, Assassin dual-blade PDC, and existing off-hand suppression.
 - [ ] **Step 4: Update key descriptions** to disclose the required modifier without hardcoding the base key, since the base KeyMapping remains remappable.
 - [ ] **Step 5: Verify** source diff and ensure only the intended keybind gates and descriptions changed.
