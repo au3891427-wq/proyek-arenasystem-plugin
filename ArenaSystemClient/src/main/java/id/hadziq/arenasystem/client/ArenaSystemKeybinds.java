@@ -27,10 +27,12 @@ final class ArenaSystemKeybinds {
     private static KeyMapping secondarySkillKey;
     private static KeyMapping classSkillItemKey;
     private static KeyMapping assassinOffhandClickKey;
+    private static KeyMapping sniperAimLockKey;
 
     private static long lastPrimaryInput;
     private static long lastSecondaryInput;
     private static long lastClassSkillItemInput;
+    private static long lastSniperAimLockInput;
 
     private static boolean initialized;
 
@@ -49,6 +51,8 @@ final class ArenaSystemKeybinds {
                 "key.arstm_client0qb201.secondary_skill", InputConstants.KEY_H);
         classSkillItemKey = registerKeyboard(
                 "key.arstm_client0qb201.class_skill_item", InputConstants.KEY_J);
+        sniperAimLockKey = registerKeyboard(
+                "key.arstm_client0qb201.sniper_aim_lock", InputConstants.KEY_Q);
         assassinOffhandClickKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.arstm_client0qb201.assassin_offhand",
                 InputConstants.Type.MOUSE,
@@ -72,6 +76,7 @@ final class ArenaSystemKeybinds {
         boolean secondaryPressed = secondarySkillKey.consumeClick();
         boolean classSkillItemPressed = classSkillItemKey.consumeClick();
         boolean assassinOffhandClicked = assassinOffhandClickKey.consumeClick();
+        boolean sniperAimLockPressed = sniperAimLockKey.consumeClick();
 
         if (client.gui.screen() != null) {
             return;
@@ -87,6 +92,12 @@ final class ArenaSystemKeybinds {
             SkillInputClient.send(SkillInputProtocol.ACTION_ASSASSIN_OFFHAND);
         }
 
+        long now = System.nanoTime();
+        if (sniperAimLockPressed && isDebounceReady(now, lastSniperAimLockInput)) {
+            lastSniperAimLockInput = now;
+            SkillInputClient.send(SkillInputProtocol.ACTION_SNIPER_AIM_LOCK);
+        }
+
         int pressedCount = (primaryPressed ? 1 : 0)
                 + (secondaryPressed ? 1 : 0)
                 + (classSkillItemPressed ? 1 : 0);
@@ -94,7 +105,6 @@ final class ArenaSystemKeybinds {
             return;
         }
 
-        long now = System.nanoTime();
         if (primaryPressed && isDebounceReady(now, lastPrimaryInput)) {
             lastPrimaryInput = now;
             triggerPrimarySkill();
