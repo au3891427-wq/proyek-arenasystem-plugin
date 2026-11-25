@@ -44,7 +44,7 @@ abstract class KeyBindsScreenMixin {
             );
     }
 
-    @Inject(method = "keyPressed", at = @At("TAIL"))
+    @Inject(method = "keyPressed", at = @At("RETURN"))
     private void arenasystem$applyKeyboardModifiers(KeyEvent event, CallbackInfoReturnable<Boolean> callback) {
         arenasystem$commitPendingModifiers();
     }
