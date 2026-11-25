@@ -6,6 +6,7 @@
     "KeyBindsScreenAccessor",
     "KeyMappingAccessor",
     "KeyBindsScreenMixin",
+    "ButtonMixin",
     "KeyMappingMixin"
   ],
   "injectors": {
