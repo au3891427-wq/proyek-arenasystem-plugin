@@ -68,7 +68,7 @@ abstract class KeyBindsScreenMixin {
         );
     }
 
-    @Inject(method = "mouseClicked", at = @At("TAIL"))
+    @Inject(method = "mouseClicked", at = @At("RETURN"))
     private void arenasystem$applyMouseModifiers(
         MouseButtonEvent event,
         boolean doubleClick,
