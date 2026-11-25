@@ -1,0 +1,11 @@
+{
+  "key.category.arstm_client0qb201.combat": "ArenaSystem Client",
+  "key.arstm_client0qb201.primary_skill": "Use Primary Class Skill",
+  "key.arstm_client0qb201.secondary_skill": "Use Secondary Class Skill",
+  "key.arstm_client0qb201.class_skill_item": "Use Held Class Skill Item",
+  "key.arstm_client0qb201.assassin_offhand": "Assassin Off-hand Attack",
+  "key.arstm_client0qb201.sniper_aim_lock": "Toggle Sniper Aim Lock",
+  "key.arstm_client0qb201.modifier.shift": "Shift",
+  "key.arstm_client0qb201.modifier.control": "Ctrl",
+  "key.arstm_client0qb201.modifier.alt": "Alt"
+}
