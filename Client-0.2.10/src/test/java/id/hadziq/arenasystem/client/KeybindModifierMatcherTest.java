@@ -64,7 +64,7 @@ public final class KeybindModifierMatcherTest {
         assertAccessor("KeyBindsScreenAccessor", "arenasystem$getResetButton", "resetButton");
         assertResetButtonIdentityPolicy();
 
-        System.out.println("PASS: 18 modifier assertions + 8 keybind UI regression assertions");
+        System.out.println("PASS: modifier matcher and keybind UI regression checks");
     }
 
     private static void assertInjection(
