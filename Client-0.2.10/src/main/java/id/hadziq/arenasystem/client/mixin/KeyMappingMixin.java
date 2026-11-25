@@ -6,7 +6,6 @@ import id.hadziq.arenasystem.client.KeybindModifierMatcher;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.options.controls.KeyBindsScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import org.spongepowered.asm.mixin.Mixin;
@@ -56,10 +55,4 @@ abstract class KeyMappingMixin {
         callback.setReturnValue(display);
     }
 
-    @Inject(method = "resetMapping", at = @At("HEAD"))
-    private static void arenasystem$resetModifierDefaults(CallbackInfo callback) {
-        if (Minecraft.getInstance().gui.screen() instanceof KeyBindsScreen) {
-            KeybindChordConfig.resetToDefaults();
-        }
-    }
 }
