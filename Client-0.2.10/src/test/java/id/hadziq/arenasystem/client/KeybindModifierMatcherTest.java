@@ -36,6 +36,10 @@ public final class KeybindModifierMatcherTest {
         assertTrue(KeybindModifierMatcher.matchesConfiguredChord(0, 0), "unmodified binding works without modifiers");
         assertTrue(KeybindModifierMatcher.matchesConfiguredChord(1, 1), "configured Shift chord matches exactly");
         assertFalse(KeybindModifierMatcher.matchesConfiguredChord(5, 1), "modified chord rejects unrelated extra modifiers");
+        assertTrue(KeybindModifierMatcher.bindingsConflict(true, 1, 1), "same key and same modifier chord conflicts");
+        assertFalse(KeybindModifierMatcher.bindingsConflict(true, 1, 4), "same key with Shift and Control does not conflict");
+        assertFalse(KeybindModifierMatcher.bindingsConflict(true, 1, 0), "same key with Shift and no modifier does not conflict");
+        assertFalse(KeybindModifierMatcher.bindingsConflict(false, 1, 1), "different physical keys do not conflict");
         assertTrue(KeybindModifierMatcher.isValidMask(0), "zero mask is valid");
         assertTrue(KeybindModifierMatcher.isValidMask(7), "all supported modifiers are valid");
         assertFalse(KeybindModifierMatcher.isValidMask(8), "unsupported modifier bit is invalid");
@@ -58,6 +62,12 @@ public final class KeybindModifierMatcherTest {
         // KeyMapping.resetMapping() also runs when a row is selected or rebound.
         // It must never reset ArenaSystem's modifier configuration.
         assertNoInjectionTarget("KeyMappingMixin", "resetMapping");
+        assertInjection(
+            "KeyMappingMixin",
+            "arenasystem$compareManagedModifierChords",
+            "same",
+            "RETURN"
+        );
 
         // Modifier defaults may reset only when the actual footer Reset All button is pressed.
         assertInjection(
