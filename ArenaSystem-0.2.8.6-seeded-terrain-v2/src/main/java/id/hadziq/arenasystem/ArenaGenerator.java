@@ -1,9 +1,11 @@
 package id.hadziq.arenasystem;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.TileState;
+import org.bukkit.block.data.BlockData;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -474,6 +476,12 @@ final class ArenaGenerator {
      * Their footprints avoid the objective, lanes, active spawns and existing
      * gameplay edits. They remain ordinary BlockEdits in the arena snapshot plan.
      */
+    /**
+     * Seeded village set. Two distinct templates are selected per seed and
+     * distributed as opposite pairs (180-degree symmetry), so the four
+     * quadrants receive a balanced mix instead of four copies of one template.
+     * Every placement is preflighted before any structure is queued.
+     */
     private static void buildGenericStructures(World world, ArenaData arena, TerrainProfile terrain,
                                                Map<BlockPos, BlockEdit> edits, long seed, int radius,
                                                int teamCount) {
@@ -484,17 +492,19 @@ final class ArenaGenerator {
         if (!isGenericRegionSafe(arena, siteX, siteZ, relic, teamCount)) return;
 
         Random random = new Random(seed ^ 0x47454E5354525543L);
-        int template = random.nextInt(3);
+        int firstTemplate = random.nextInt(4);
+        int secondTemplate = (firstTemplate + 1 + random.nextInt(3)) % 4;
         Material wall = switch (random.nextInt(3)) {
             case 0 -> Material.STONE_BRICKS;
             case 1 -> Material.MOSSY_STONE_BRICKS;
             default -> Material.COBBLESTONE;
         };
 
-        // Preflight every mirrored site before placing any of them. Never leave one
-        // quadrant with a structure that the opposing quadrants could not receive.
+        // Two sites receive one template and the opposite diagonal pair receives
+        // the other. This preserves rotational symmetry while creating variety.
         for (int sx : new int[]{-1, 1}) {
             for (int sz : new int[]{-1, 1}) {
+                int template = sx == sz ? firstTemplate : secondTemplate;
                 if (!isGenericSiteClear(world, arena, terrain, edits,
                         sx * siteX, sz * siteZ, template)) return;
             }
@@ -503,9 +513,13 @@ final class ArenaGenerator {
             for (int sz : new int[]{-1, 1}) {
                 int x = sx * siteX;
                 int z = sz * siteZ;
-                if (template == 0) buildGenericCabin(world, arena, terrain, edits, x, z, wall);
-                else if (template == 1) buildGenericTower(world, arena, terrain, edits, x, z, wall);
-                else buildGenericRuin(world, arena, terrain, edits, x, z, wall);
+                int template = sx == sz ? firstTemplate : secondTemplate;
+                switch (template) {
+                    case 0 -> buildGenericCabin(world, arena, terrain, edits, x, z, wall);
+                    case 1 -> buildGenericStoneHouse(world, arena, terrain, edits, x, z, wall);
+                    case 2 -> buildGenericTower(world, arena, terrain, edits, x, z, wall);
+                    default -> buildGenericRuin(world, arena, terrain, edits, x, z, wall);
+                }
             }
         }
     }
@@ -527,8 +541,8 @@ final class ArenaGenerator {
 
     private static boolean isGenericSiteClear(World world, ArenaData arena, TerrainProfile terrain,
                                               Map<BlockPos, BlockEdit> edits, int cx, int cz, int template) {
-        int half = template == 1 ? 2 : 3;
-        int height = template == 1 ? 5 : 3;
+        int half = template == 2 ? 2 : 3;
+        int height = template == 2 ? 5 : template == 3 ? 3 : 7;
         int minY = Integer.MAX_VALUE;
         int maxY = Integer.MIN_VALUE;
         for (int x = cx - half; x <= cx + half; x++) {
@@ -554,25 +568,104 @@ final class ArenaGenerator {
         return maxY - minY <= 2;
     }
 
+    /** Wooden village house: usable two-block door, glass windows, furnished interior and pitched roof. */
     private static void buildGenericCabin(World world, ArenaData arena, TerrainProfile terrain,
                                           Map<BlockPos, BlockEdit> edits, int cx, int cz, Material wall) {
+        buildGenericHouseShell(world, arena, terrain, edits, cx, cz,
+                Material.SPRUCE_PLANKS, Material.COBBLESTONE, Material.SPRUCE_DOOR,
+                Material.SPRUCE_STAIRS, Material.SPRUCE_SLAB, wall);
+        addGenericInterior(world, arena, terrain, edits, cx, cz, Material.SPRUCE_PLANKS);
+    }
+
+    /** Stone village house variant with a contrasting timber frame and stone roof. */
+    private static void buildGenericStoneHouse(World world, ArenaData arena, TerrainProfile terrain,
+                                               Map<BlockPos, BlockEdit> edits, int cx, int cz, Material wall) {
+        buildGenericHouseShell(world, arena, terrain, edits, cx, cz,
+                Material.STONE_BRICKS, Material.MOSSY_STONE_BRICKS, Material.OAK_DOOR,
+                Material.STONE_BRICK_STAIRS, Material.STONE_BRICK_SLAB, wall);
+        addGenericInterior(world, arena, terrain, edits, cx, cz, Material.OAK_PLANKS);
+        for (int z : new int[]{-2, 2}) {
+            int y = terrain.heightAt(cx, cz + z) - arena.centerY + 3;
+            addAir(world, arena, edits, cx, y, cz + z, Material.STRIPPED_OAK_LOG);
+        }
+    }
+
+    private static void buildGenericHouseShell(World world, ArenaData arena, TerrainProfile terrain,
+                                               Map<BlockPos, BlockEdit> edits, int cx, int cz,
+                                               Material floor, Material foundation, Material doorMaterial,
+                                               Material roofStair, Material roofSlab, Material wall) {
+        // 7x7 footprint and continuous floor; perimeter foundation follows the terrain profile.
         for (int x = -3; x <= 3; x++) {
             for (int z = -3; z <= 3; z++) {
                 addSurface(world, arena, terrain, edits, cx + x, cz + z,
-                        Math.abs(x) == 3 || Math.abs(z) == 3 ? Material.COBBLESTONE : Material.SPRUCE_PLANKS);
+                        Math.abs(x) == 3 || Math.abs(z) == 3 ? foundation : floor);
+            }
+        }
+
+        for (int x = -3; x <= 3; x++) {
+            for (int z = -3; z <= 3; z++) {
                 if (Math.abs(x) != 3 && Math.abs(z) != 3) continue;
                 int base = terrain.heightAt(cx + x, cz + z) - arena.centerY;
-                for (int y = 1; y <= 2; y++) {
-                    boolean doorway = z == 3 && x == 0;
-                    boolean window = y == 2 && ((Math.abs(x) == 3 && z == 0) || (z == -3 && x == -2));
-                    if (!doorway && !window) addAir(world, arena, edits, cx + x, base + y, cz + z, wall);
+                for (int y = 1; y <= 3; y++) {
+                    boolean doorway = z == 3 && x == 0 && y <= 2;
+                    boolean sideWindow = Math.abs(x) == 3 && z == 0 && y == 2;
+                    boolean rearWindow = z == -3 && x == 0 && y == 2;
+                    if (doorway || sideWindow || rearWindow) continue;
+                    addAir(world, arena, edits, cx + x, base + y, cz + z, wall);
+                }
+                if (Math.abs(x) == 3 && z == 0) {
+                    addGenericBlockData(world, arena, edits, cx + x, base + 2, cz + z,
+                            Bukkit.createBlockData("minecraft:glass_pane"));
+                }
+                if (z == -3 && x == 0) {
+                    addGenericBlockData(world, arena, edits, cx + x, base + 2, cz + z,
+                            Bukkit.createBlockData("minecraft:glass_pane"));
                 }
             }
         }
-        for (int x = -3; x <= 3; x++) for (int z = -3; z <= 3; z++) {
-            int y = terrain.heightAt(cx + x, cz + z) - arena.centerY + 3;
-            addAir(world, arena, edits, cx + x, y, cz + z, Material.SPRUCE_SLAB);
+
+        // Door is explicitly represented as lower + upper BlockData, not a lone Material.
+        int doorY = terrain.heightAt(cx, cz + 3) - arena.centerY + 1;
+        addGenericBlockData(world, arena, edits, cx, doorY, cz + 3,
+                Bukkit.createBlockData("minecraft:" + doorMaterial.name().toLowerCase(java.util.Locale.ROOT)
+                        + "[facing=south,half=lower,hinge=left,open=false,powered=false]"));
+        addGenericBlockData(world, arena, edits, cx, doorY + 1, cz + 3,
+                Bukkit.createBlockData("minecraft:" + doorMaterial.name().toLowerCase(java.util.Locale.ROOT)
+                        + "[facing=south,half=upper,hinge=left,open=false,powered=false]"));
+
+        // Gable roof: mirrored stair slopes meet at a continuous ridge.
+        for (int z = -3; z <= 3; z++) {
+            for (int x = -3; x <= 3; x++) {
+                int base = terrain.heightAt(cx + x, cz + z) - arena.centerY;
+                if (x == 0) {
+                    addAir(world, arena, edits, cx + x, base + 6, cz + z, roofSlab);
+                } else {
+                    String facing = x < 0 ? "west" : "east";
+                    int roofY = base + 3 + (3 - Math.abs(x));
+                    addGenericBlockData(world, arena, edits, cx + x, roofY, cz + z,
+                            Bukkit.createBlockData("minecraft:" + roofStair.name().toLowerCase(java.util.Locale.ROOT)
+                                    + "[facing=" + facing + ",half=bottom,shape=straight,waterlogged=false]"));
+                }
+            }
         }
+    }
+
+    private static void addGenericInterior(World world, ArenaData arena, TerrainProfile terrain,
+                                           Map<BlockPos, BlockEdit> edits, int cx, int cz, Material floor) {
+        int base = terrain.heightAt(cx, cz) - arena.centerY;
+        // Furniture is deliberately made from ordinary blocks (no inventories or tile entities),
+        // so the existing BlockData snapshot can restore every part safely.
+        addAir(world, arena, edits, cx - 2, base + 1, cz - 2, Material.BOOKSHELF);
+        addAir(world, arena, edits, cx + 2, base + 1, cz - 2, Material.CRAFTING_TABLE);
+        addAir(world, arena, edits, cx - 2, base + 1, cz + 1, Material.BARREL);
+        addAir(world, arena, edits, cx + 2, base + 1, cz + 1, Material.FURNACE);
+        addAir(world, arena, edits, cx, base + 1, cz, Material.OAK_FENCE);
+        addAir(world, arena, edits, cx, base + 2, cz, Material.LANTERN);
+        addGenericBlockData(world, arena, edits, cx - 1, base + 1, cz,
+                Bukkit.createBlockData("minecraft:oak_stairs[facing=east,half=bottom,shape=straight,waterlogged=false]"));
+        addGenericBlockData(world, arena, edits, cx + 1, base + 1, cz,
+                Bukkit.createBlockData("minecraft:oak_stairs[facing=west,half=bottom,shape=straight,waterlogged=false]"));
+        addAir(world, arena, edits, cx, base + 1, cz + 2, Material.CARPET);
     }
 
     private static void buildGenericTower(World world, ArenaData arena, TerrainProfile terrain,
@@ -612,6 +705,16 @@ final class ArenaGenerator {
             addAir(world, arena, edits, x, base + y, z,
                     y == height ? Material.CHISELED_STONE_BRICKS : material);
         }
+    }
+
+    private static void addGenericBlockData(World world, ArenaData arena, Map<BlockPos, BlockEdit> edits,
+                                            int x, int y, int z, BlockData blockData) {
+        Block block = world.getBlockAt(arena.centerX + x, arena.centerY + y, arena.centerZ + z);
+        if (block.getState() instanceof TileState) return;
+        BlockEdit planned = edits.get(new BlockPos(x, y, z));
+        if (planned != null && !planned.material.isAir() && planned.material.isSolid()) return;
+        if (planned == null && !block.isPassable()) return;
+        edits.put(new BlockPos(x, y, z), new BlockEdit(x, y, z, blockData));
     }
 
     private static void buildPerimeter(World world, ArenaData arena, TerrainProfile terrain,
