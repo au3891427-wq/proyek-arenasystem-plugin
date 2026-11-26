@@ -2,7 +2,7 @@ name: Build Paper 26.3 Plugin (JDK 25 + Maven 3.10.2)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, feature/generic-seeded-structures ]
   pull_request:
     branches: [ main ]
 
@@ -33,8 +33,8 @@ jobs:
           mvn -f "$POM_PATH" -B -q package
 
       - name: Upload JAR Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: plugin-jar
-          path: "**/target/*.jar"
-          if-no-files-found: error
+      uses: actions/upload-artifact@v4
+      with:
+        name: plugin-jar
+        path: "**/target/*.jar"
+        if-no-files-found: error
