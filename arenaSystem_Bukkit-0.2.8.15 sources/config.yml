@@ -1,0 +1,92 @@
+# ArenaSystem companion Fabric client requirement.
+client-mod:
+  required: true
+  timeout-seconds: 10
+
+# Checks the public release manifest and notifies console/server admins. No files are downloaded or installed.
+updates:
+  enabled: true
+  check-interval-hours: 6
+  manifest-url: "https://raw.githubusercontent.com/au3891427-wq/Arena-System-Plugins-Client-and-Server/main/arenasystem-server-update-manifest.json"
+
+# Optional server-delivered resource pack for the Assassin Dagger model.
+# The server can verify only packs requested from this URL, not manually installed packs.
+resource-pack:
+  assassin-dagger:
+    url: ""
+    sha1: "c4bea426f1b8f643dd74aa5bf56588c966b6b4d2"
+
+terrain:
+  # Batas tetap: beda elevasi permukaan antarkolom horizontal maksimal 1 blok.
+  max-adjacent-step: 1
+  # Batas cut/fill maksimum pada satu kolom; arena ditolak jika terlampaui.
+  max-column-adjustment: 12
+
+matches:
+  # Allows an arena match to start when only one player is online.
+  allow-single-player: true
+  duration-seconds: 300
+  tdm-target-score: 20
+  relic-target-score: 3
+  random-stuff-interval-seconds: 30
+  random-stuff-max-recipients: 6
+  random-stuff-expire-seconds: 20
+  random-stuff-ground-expire-seconds: 5
+
+# Protection defaults to deny inside registered arenas.
+# Rules set by /arena breakable, disbreakable, placeable, or displaceable
+# are stored below. More specific rules take priority.
+protection:
+  # Tanaman pengganggu (rumput, fern, bunga, semak, dan sejenisnya) boleh dihancurkan
+  # secara default. Aturan breakable/disbreakable eksplisit tetap mengalahkan default ini.
+  allow-vegetation-break-by-default: true
+  global: {}
+  arenas: {}
+
+# Relic Rush is objective-only: one equal Relic Runner kit for both teams.
+
+
+# Active TDM class skills. Durations and cooldowns are in seconds.
+# Tekan F untuk Skill 1; Shift+F atau Sprint+F untuk Skill 2.
+# Ninja Shadow Step distance is clamped to 2-12 blocks by the plugin.
+class-abilities:
+  knight_guard:
+    duration-seconds: 3
+    cooldown-seconds: 26
+  tank_endurance:
+    duration-seconds: 5
+    cooldown-seconds: 45
+  assassin_burst:
+    duration-seconds: 3
+    cooldown-seconds: 30
+  ninja_vanish:
+    duration-seconds: 6
+    cooldown-seconds: 34
+  ninja_shadow_step:
+    distance-blocks: 8
+    cooldown-seconds: 20
+  archer_volley:
+    cooldown-seconds: 20
+  sniper_mark:
+    cooldown-seconds: 25
+  boxer_rapid_jab:
+    cooldown-seconds: 20
+  boxer_barrage:
+    cooldown-seconds: 28
+  demoman_dynamite:
+    cooldown-seconds: 10
+  demoman_primary_bomb:
+    cooldown-seconds: 2
+  demoman_blast_mine:
+    cooldown-seconds: 20
+
+  knight_rally:
+    cooldown-seconds: 32
+  tank_ground_slam:
+    cooldown-seconds: 30
+  assassin_venom_edge:
+    cooldown-seconds: 22
+  archer_pinning_shot:
+    cooldown-seconds: 18
+  sniper_focus_shot:
+    cooldown-seconds: 25
