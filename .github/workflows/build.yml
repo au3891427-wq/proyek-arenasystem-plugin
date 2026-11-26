@@ -27,11 +27,14 @@ jobs:
           maven-version: 3.10.2
 
       - name: Build with Maven
-        run: mvn -B -q package
+        run: |
+          POM_PATH=$(find . -maxdepth 3 -name "pom.xml" | head -n 1)
+          echo "Found POM at: $POM_PATH"
+          mvn -f "$POM_PATH" -B -q package
 
       - name: Upload JAR Artifact
         uses: actions/upload-artifact@v4
         with:
           name: plugin-jar
-          path: target/*.jar
+          path: "**/target/*.jar"
           if-no-files-found: error
