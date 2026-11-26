@@ -486,43 +486,116 @@ final class ArenaGenerator {
                                                Map<BlockPos, BlockEdit> edits, long seed, int radius,
                                                int teamCount) {
         boolean relic = "relic_rush".equalsIgnoreCase(arena.mode);
-        // TDM village sites sit in the outer diagonal pockets, away from the
-        // seeded midfield cover band (x=8..24, z=7..23).
-        int siteX = Math.min(radius - 9, relic ? 39 : 31);
-        int siteZ = Math.min(radius - 10, relic ? 34 : 30);
-        if (siteX < 10 || siteZ < 10) return;
-        if (!isGenericRegionSafe(arena, siteX, siteZ, relic, teamCount)) return;
-
         Random random = new Random(seed ^ 0x47454E5354525543L);
-        int firstTemplate = random.nextInt(4);
-        int secondTemplate = (firstTemplate + 1 + random.nextInt(3)) % 4;
+        int houseTemplate = random.nextBoolean() ? 0 : 1;
+        int secondaryTemplate = random.nextInt(3) == 0 ? 3 : 2;
         Material wall = switch (random.nextInt(3)) {
             case 0 -> Material.STONE_BRICKS;
             case 1 -> Material.MOSSY_STONE_BRICKS;
             default -> Material.COBBLESTONE;
         };
 
-        // Keep opposite sites paired for fairness, but validate each pair
-        // independently. One blocked pair must not cancel the other pair.
-        int[][] sites = {
-                {-siteX, -siteZ}, {siteX, siteZ},
-                {-siteX, siteZ}, {siteX, -siteZ}
-        };
-        int[] templates = {firstTemplate, firstTemplate, secondTemplate, secondTemplate};
-        for (int i = 0; i < sites.length; i += 2) {
-            int[] first = sites[i];
-            int[] opposite = sites[i + 1];
-            int template = templates[i];
-            if (!isGenericSiteClear(world, arena, terrain, edits,
-                    first[0], first[1], template)
-                    || !isGenericSiteClear(world, arena, terrain, edits,
-                    opposite[0], opposite[1], template)) {
-                continue;
+        // Candidate pockets are searched from the outside inward. The list is
+        // deterministic for a seed, while each accepted placement stays mirrored.
+        List<int[]> candidates = genericStructureCandidates(radius, relic, random);
+        int[] firstHouseSite = null;
+        for (int[] candidate : candidates) {
+            int siteX = candidate[0];
+            int siteZ = candidate[1];
+            int[][] sites = {
+                    {-siteX, -siteZ}, {siteX, siteZ},
+                    {-siteX, siteZ}, {siteX, -siteZ}
+            };
+
+            boolean allClear = true;
+            for (int[] site : sites) {
+                if (!isGenericRegionSafe(arena, site[0], site[1], relic, teamCount)
+                        || !isGenericSiteClear(world, arena, terrain, edits,
+                        site[0], site[1], houseTemplate)) {
+                    allClear = false;
+                    break;
+                }
             }
-            buildGenericStructure(world, arena, terrain, edits, first[0], first[1], template, wall);
-            buildGenericStructure(world, arena, terrain, edits,
-                    opposite[0], opposite[1], template, wall);
+            if (allClear) {
+                for (int[] site : sites) {
+                    buildGenericStructure(world, arena, terrain, edits,
+                            site[0], site[1], houseTemplate, wall);
+                }
+                firstHouseSite = candidate;
+                break;
+            }
+
+            // If one quadrant is obstructed, retain fairness by accepting only
+            // a complete opposite pair; never let one blocked site cancel every site.
+            for (int pair = 0; pair < 2; pair++) {
+                int[] first = sites[pair * 2];
+                int[] opposite = sites[pair * 2 + 1];
+                if (!isGenericRegionSafe(arena, first[0], first[1], relic, teamCount)
+                        || !isGenericRegionSafe(arena, opposite[0], opposite[1], relic, teamCount)
+                        || !isGenericSiteClear(world, arena, terrain, edits,
+                        first[0], first[1], houseTemplate)
+                        || !isGenericSiteClear(world, arena, terrain, edits,
+                        opposite[0], opposite[1], houseTemplate)) {
+                    continue;
+                }
+                buildGenericStructure(world, arena, terrain, edits,
+                        first[0], first[1], houseTemplate, wall);
+                buildGenericStructure(world, arena, terrain, edits,
+                        opposite[0], opposite[1], houseTemplate, wall);
+                firstHouseSite = candidate;
+                break;
+            }
+            if (firstHouseSite != null) break;
         }
+
+        if (firstHouseSite == null) return;
+
+        // A second mirrored pair adds variety, but is optional. It is kept far
+        // enough from the first pair to avoid overlapping 7x7 house footprints.
+        for (int[] candidate : candidates) {
+            if (Math.abs(candidate[0] - firstHouseSite[0])
+                    + Math.abs(candidate[1] - firstHouseSite[1]) < 10) continue;
+            int[][] sites = {
+                    {-candidate[0], -candidate[1]}, {candidate[0], candidate[1]},
+                    {-candidate[0], candidate[1]}, {candidate[0], -candidate[1]}
+            };
+            for (int pair = 0; pair < 2; pair++) {
+                int[] first = sites[pair * 2];
+                int[] opposite = sites[pair * 2 + 1];
+                if (!isGenericRegionSafe(arena, first[0], first[1], relic, teamCount)
+                        || !isGenericRegionSafe(arena, opposite[0], opposite[1], relic, teamCount)
+                        || !isGenericSiteClear(world, arena, terrain, edits,
+                        first[0], first[1], secondaryTemplate)
+                        || !isGenericSiteClear(world, arena, terrain, edits,
+                        opposite[0], opposite[1], secondaryTemplate)) {
+                    continue;
+                }
+                buildGenericStructure(world, arena, terrain, edits,
+                        first[0], first[1], secondaryTemplate, wall);
+                buildGenericStructure(world, arena, terrain, edits,
+                        opposite[0], opposite[1], secondaryTemplate, wall);
+                return;
+            }
+        }
+    }
+
+    private static List<int[]> genericStructureCandidates(int radius, boolean relic, Random random) {
+        List<int[]> candidates = new ArrayList<>();
+        int minimum = relic ? 39 : 25;
+        int maximum = Math.min(radius - 5, relic ? 48 : 35);
+        for (int x = minimum; x <= maximum; x += 2) {
+            for (int z = minimum; z <= maximum; z += 2) {
+                candidates.add(new int[]{x, z});
+            }
+        }
+        // Fisher-Yates gives deterministic variety without depending on world state.
+        for (int i = candidates.size() - 1; i > 0; i--) {
+            int j = random.nextInt(i + 1);
+            int[] value = candidates.get(i);
+            candidates.set(i, candidates.get(j));
+            candidates.set(j, value);
+        }
+        return candidates;
     }
 
     private static void buildGenericStructure(World world, ArenaData arena, TerrainProfile terrain,
