@@ -538,13 +538,15 @@ final class ArenaGenerator {
                 minY = Math.min(minY, surface);
                 maxY = Math.max(maxY, surface);
                 for (int dy = 1; dy <= height; dy++) {
-                    BlockPos pos = new BlockPos(x, surface + dy - arena.centerY, z);
+                    int worldY = surface + dy;
+                    if (worldY < world.getMinHeight() || worldY >= world.getMaxHeight()) return false;
+                    BlockPos pos = new BlockPos(x, worldY - arena.centerY, z);
                     BlockEdit planned = edits.get(pos);
                     if (planned != null) {
                         if (planned.material.isAir() || !planned.material.isSolid()) continue;
                         return false;
                     }
-                    Block block = world.getBlockAt(arena.centerX + x, surface + dy, arena.centerZ + z);
+                    Block block = world.getBlockAt(arena.centerX + x, worldY, arena.centerZ + z);
                     if (block.getState() instanceof TileState || !block.isPassable()) return false;
                 }
             }
