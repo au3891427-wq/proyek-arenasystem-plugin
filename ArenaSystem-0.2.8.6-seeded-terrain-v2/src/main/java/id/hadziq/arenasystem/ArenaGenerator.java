@@ -657,8 +657,8 @@ final class ArenaGenerator {
         // so the existing BlockData snapshot can restore every part safely.
         addAir(world, arena, edits, cx - 2, base + 1, cz - 2, Material.BOOKSHELF);
         addAir(world, arena, edits, cx + 2, base + 1, cz - 2, Material.CRAFTING_TABLE);
-        addAir(world, arena, edits, cx - 2, base + 1, cz + 1, Material.BARREL);
-        addAir(world, arena, edits, cx + 2, base + 1, cz + 1, Material.FURNACE);
+        addAir(world, arena, edits, cx - 2, base + 1, cz + 1, Material.BOOKSHELF);
+        addAir(world, arena, edits, cx + 2, base + 1, cz + 1, Material.COBBLESTONE_WALL);
         addAir(world, arena, edits, cx, base + 1, cz, Material.OAK_FENCE);
         addAir(world, arena, edits, cx, base + 2, cz, Material.LANTERN);
         addGenericBlockData(world, arena, edits, cx - 1, base + 1, cz,
@@ -712,7 +712,7 @@ final class ArenaGenerator {
         Block block = world.getBlockAt(arena.centerX + x, arena.centerY + y, arena.centerZ + z);
         if (block.getState() instanceof TileState) return;
         BlockEdit planned = edits.get(new BlockPos(x, y, z));
-        if (planned != null && !planned.material.isAir() && planned.material.isSolid()) return;
+        if (planned != null && !planned.material.isAir() && planned.material.isSolid()\n                && planned.material != blockData.getMaterial()) return;
         if (planned == null && !block.isPassable()) return;
         edits.put(new BlockPos(x, y, z), new BlockEdit(x, y, z, blockData));
     }
