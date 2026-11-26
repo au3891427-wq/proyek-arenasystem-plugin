@@ -37,7 +37,7 @@ final class ArenaGenerator {
         } else {
             buildTeamDeathmatch(world, arena, terrain, edits, seed, radius, teamCount);
         }
-        buildGenericStructures(world, arena, terrain, edits, seed, radius);
+        buildGenericStructures(world, arena, terrain, edits, seed, radius, teamCount);
         buildPerimeter(world, arena, terrain, edits, radius);
         return new ArrayList<>(edits.values());
     }
@@ -475,12 +475,13 @@ final class ArenaGenerator {
      * gameplay edits. They remain ordinary BlockEdits in the arena snapshot plan.
      */
     private static void buildGenericStructures(World world, ArenaData arena, TerrainProfile terrain,
-                                               Map<BlockPos, BlockEdit> edits, long seed, int radius) {
+                                               Map<BlockPos, BlockEdit> edits, long seed, int radius,
+                                               int teamCount) {
         boolean relic = "relic_rush".equalsIgnoreCase(arena.mode);
         int siteX = Math.min(radius - 9, relic ? 39 : 29);
         int siteZ = Math.min(radius - 10, relic ? 34 : 20);
         if (siteX < 10 || siteZ < 10) return;
-        if (!isGenericRegionSafe(arena, siteX, siteZ, relic)) return;
+        if (!isGenericRegionSafe(arena, siteX, siteZ, relic, teamCount)) return;
 
         Random random = new Random(seed ^ 0x47454E5354525543L);
         int template = random.nextInt(3);
@@ -490,11 +491,18 @@ final class ArenaGenerator {
             default -> Material.COBBLESTONE;
         };
 
+        // Preflight every mirrored site before placing any of them. Never leave one
+        // quadrant with a structure that the opposing quadrants could not receive.
+        for (int sx : new int[]{-1, 1}) {
+            for (int sz : new int[]{-1, 1}) {
+                if (!isGenericSiteClear(world, arena, terrain, edits,
+                        sx * siteX, sz * siteZ, template)) return;
+            }
+        }
         for (int sx : new int[]{-1, 1}) {
             for (int sz : new int[]{-1, 1}) {
                 int x = sx * siteX;
                 int z = sz * siteZ;
-                if (!isGenericSiteClear(world, arena, terrain, edits, x, z, template)) continue;
                 if (template == 0) buildGenericCabin(world, arena, terrain, edits, x, z, wall);
                 else if (template == 1) buildGenericTower(world, arena, terrain, edits, x, z, wall);
                 else buildGenericRuin(world, arena, terrain, edits, x, z, wall);
@@ -502,12 +510,14 @@ final class ArenaGenerator {
         }
     }
 
-    private static boolean isGenericRegionSafe(ArenaData arena, int x, int z, boolean relic) {
+    private static boolean isGenericRegionSafe(ArenaData arena, int x, int z,
+                                               boolean relic, int teamCount) {
         if (x <= 8 || z <= 8) return false;
         if (relic) {
-            if (Math.abs(x - 18) <= 5 || Math.abs(z - 18) <= 5) return false;
+            int sideLane = (int) Math.round(18.0D * arena.radius / 40.0D);
+            if (Math.abs(x - sideLane) <= 5 || Math.abs(z - sideLane) <= 5) return false;
         } else if (x <= 5 || z <= 5) return false;
-        for (int[] spawn : SeededTerrainBlender.anchors(arena.spawnOffset, relic ? 2 : 4)) {
+        for (int[] spawn : SeededTerrainBlender.anchors(arena.spawnOffset, teamCount)) {
             int dx = Math.max(0, Math.abs(x - spawn[0]) - 7);
             int dz = Math.max(0, Math.abs(z - spawn[1]) - 7);
             if (dx + dz < 8) return false;
