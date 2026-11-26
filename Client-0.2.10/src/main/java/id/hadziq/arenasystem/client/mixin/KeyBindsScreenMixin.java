@@ -1,9 +1,8 @@
 package id.hadziq.arenasystem.client.mixin;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import id.hadziq.arenasystem.client.KeybindChordConfig;
 import id.hadziq.arenasystem.client.KeybindModifierMatcher;
-import id.hadziq.arenasystem.client.ArenaSystemKeybinds;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.screens.options.controls.KeyBindsScreen;
 import net.minecraft.client.input.KeyEvent;
@@ -24,8 +23,10 @@ abstract class KeyBindsScreenMixin {
 
     @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
     private void arenasystem$captureModifierKeys(KeyEvent event, CallbackInfoReturnable<Boolean> callback) {
-        KeyMapping selected = ((KeyBindsScreenAccessor)this).arenasystem$getSelectedKey();
-        if (selected == null || !KeybindChordConfig.isManaged(selected.getName())) return;
+        KeyMapping selected = ((KeyBindsScreenAccessor) this).arenasystem$getSelectedKey();
+        if (selected == null || !KeybindChordConfig.isManaged(selected.getName())) {
+            return;
+        }
 
         InputConstants.Key pressedKey = InputConstants.getKey(event);
         if (KeybindModifierMatcher.isModifierKey(pressedKey.getName())) {
@@ -43,7 +44,7 @@ abstract class KeyBindsScreenMixin {
             );
     }
 
-    @Inject(method = "keyPressed", at = @At("TAIL"))
+    @Inject(method = "keyPressed", at = @At("RETURN"))
     private void arenasystem$applyKeyboardModifiers(KeyEvent event, CallbackInfoReturnable<Boolean> callback) {
         arenasystem$commitPendingModifiers();
     }
@@ -54,8 +55,10 @@ abstract class KeyBindsScreenMixin {
         boolean doubleClick,
         CallbackInfoReturnable<Boolean> callback
     ) {
-        KeyMapping selected = ((KeyBindsScreenAccessor)this).arenasystem$getSelectedKey();
-        if (selected == null || !KeybindChordConfig.isManaged(selected.getName())) return;
+        KeyMapping selected = ((KeyBindsScreenAccessor) this).arenasystem$getSelectedKey();
+        if (selected == null || !KeybindChordConfig.isManaged(selected.getName())) {
+            return;
+        }
 
         arenasystem$pendingMapping = selected;
         arenasystem$pendingModifiers = KeybindModifierMatcher.modifiersFromInput(
@@ -65,7 +68,7 @@ abstract class KeyBindsScreenMixin {
         );
     }
 
-    @Inject(method = "mouseClicked", at = @At("TAIL"))
+    @Inject(method = "mouseClicked", at = @At("RETURN"))
     private void arenasystem$applyMouseModifiers(
         MouseButtonEvent event,
         boolean doubleClick,
@@ -77,13 +80,14 @@ abstract class KeyBindsScreenMixin {
     @Unique
     private void arenasystem$commitPendingModifiers() {
         KeyMapping pending = arenasystem$pendingMapping;
-        if (pending == null) return;
-
-        KeyMapping selected = ((KeyBindsScreenAccessor)this).arenasystem$getSelectedKey();
-        if (selected == null) {
-            KeybindChordConfig.setRequiredModifiers(pending.getName(), arenasystem$pendingModifiers);
-            ((KeyBindsScreen)(Object)this).refreshKeybindLabels();
+        if (pending == null) {
+            return;
         }
+
+        // Vanilla has already processed the key or mouse input by this point.
+        // Commit now instead of waiting for selectedKey to become null on a later click.
+        KeybindChordConfig.setRequiredModifiers(pending.getName(), arenasystem$pendingModifiers);
+        ((KeyBindsScreen) (Object) this).refreshKeybindLabels();
 
         arenasystem$pendingMapping = null;
         arenasystem$pendingModifiers = 0;

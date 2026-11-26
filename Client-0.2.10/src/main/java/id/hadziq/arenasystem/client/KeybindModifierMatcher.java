@@ -14,6 +14,14 @@ public final class KeybindModifierMatcher {
         return activeModifiers == requiredModifiers;
     }
 
+    static boolean matchesConfiguredChord(int activeModifiers, int requiredModifiers) {
+        return requiredModifiers == 0 || matchesExactly(activeModifiers, requiredModifiers);
+    }
+
+    public static boolean bindingsConflict(boolean sameKey, int firstModifiers, int secondModifiers) {
+        return sameKey && firstModifiers == secondModifiers;
+    }
+
     public static int modifiersFromInput(boolean shift, boolean alt, boolean control) {
         int modifiers = 0;
         if (shift) modifiers |= SHIFT;

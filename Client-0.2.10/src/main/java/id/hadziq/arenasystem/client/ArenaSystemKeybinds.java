@@ -93,7 +93,7 @@ public final class ArenaSystemKeybinds {
                         : fallbackModifiers;
 
                     if (assassinOffhandClicked
-                        && KeybindModifierMatcher.matchesExactly(
+                        && KeybindModifierMatcher.matchesConfiguredChord(
                             assassinModifiers,
                             KeybindChordConfig.getRequiredModifiers(assassinOffhandClickKey.getName())
                         )

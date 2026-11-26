@@ -1,0 +1,43 @@
+name: Build ArenaSystem Client 0.2.10
+
+on:
+  push:
+    branches:
+      - fix/keybind-ui-offhand-crosshair
+    paths:
+      - "Client-0.2.10/**"
+      - ".github/workflows/build-client-0.2.10.yml"
+  pull_request:
+    paths:
+      - "Client-0.2.10/**"
+      - ".github/workflows/build-client-0.2.10.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.9.2"
+
+      - name: Build and run regression checks
+        working-directory: Client-0.2.10
+        run: gradle --no-daemon --console=plain clean build
+
+      - name: Upload client JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: arenaSystem_client-0.2.10
+          path: Client-0.2.10/build/libs/arenaSystem_client-0.2.10.jar
+          if-no-files-found: error

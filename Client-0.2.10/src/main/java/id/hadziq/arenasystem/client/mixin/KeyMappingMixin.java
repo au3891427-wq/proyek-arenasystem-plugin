@@ -6,7 +6,6 @@ import id.hadziq.arenasystem.client.KeybindModifierMatcher;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.options.controls.KeyBindsScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import org.spongepowered.asm.mixin.Mixin;
@@ -30,6 +29,22 @@ abstract class KeyMappingMixin {
             client.hasControlDown()
         );
         ArenaSystemKeybinds.captureModifiersForKey(key, modifiers);
+    }
+
+    @Inject(method = "same", at = @At("RETURN"), cancellable = true)
+    private void arenasystem$compareManagedModifierChords(KeyMapping other, CallbackInfoReturnable<Boolean> callback) {
+        if (!KeybindChordConfig.isManaged(getName()) || !KeybindChordConfig.isManaged(other.getName())) {
+            return;
+        }
+
+        InputConstants.Key thisKey = ((KeyMappingAccessor) this).arenasystem$getBoundKey();
+        InputConstants.Key otherKey = ((KeyMappingAccessor) other).arenasystem$getBoundKey();
+        boolean conflict = KeybindModifierMatcher.bindingsConflict(
+            thisKey.equals(otherKey),
+            KeybindChordConfig.getRequiredModifiers(getName()),
+            KeybindChordConfig.getRequiredModifiers(other.getName())
+        );
+        callback.setReturnValue(conflict);
     }
 
     @Inject(method = "getTranslatedKeyMessage", at = @At("RETURN"), cancellable = true)
@@ -56,10 +71,4 @@ abstract class KeyMappingMixin {
         callback.setReturnValue(display);
     }
 
-    @Inject(method = "resetMapping", at = @At("HEAD"))
-    private static void arenasystem$resetModifierDefaults(CallbackInfo callback) {
-        if (Minecraft.getInstance().gui.screen() instanceof KeyBindsScreen) {
-            KeybindChordConfig.resetToDefaults();
-        }
-    }
 }
