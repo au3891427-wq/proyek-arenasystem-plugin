@@ -31,6 +31,11 @@ public final class KeybindModifierMatcherTest {
 
         assertTrue(KeybindModifierMatcher.matchesExactly(5, 5), "exact modifier match");
         assertFalse(KeybindModifierMatcher.matchesExactly(7, 1), "extra modifier must not match");
+        assertTrue(KeybindModifierMatcher.matchesConfiguredChord(1, 0), "unmodified binding remains usable while Shift is held");
+        assertTrue(KeybindModifierMatcher.matchesConfiguredChord(4, 0), "unmodified binding remains usable while Control is held");
+        assertTrue(KeybindModifierMatcher.matchesConfiguredChord(0, 0), "unmodified binding works without modifiers");
+        assertTrue(KeybindModifierMatcher.matchesConfiguredChord(1, 1), "configured Shift chord matches exactly");
+        assertFalse(KeybindModifierMatcher.matchesConfiguredChord(5, 1), "modified chord rejects unrelated extra modifiers");
         assertTrue(KeybindModifierMatcher.isValidMask(0), "zero mask is valid");
         assertTrue(KeybindModifierMatcher.isValidMask(7), "all supported modifiers are valid");
         assertFalse(KeybindModifierMatcher.isValidMask(8), "unsupported modifier bit is invalid");
