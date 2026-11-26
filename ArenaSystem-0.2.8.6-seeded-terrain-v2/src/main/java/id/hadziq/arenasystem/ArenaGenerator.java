@@ -641,7 +641,7 @@ final class ArenaGenerator {
                     addAir(world, arena, edits, cx + x, base + 6, cz + z, roofSlab);
                 } else {
                     String facing = x < 0 ? "west" : "east";
-                    int roofY = base + 3 + (3 - Math.abs(x));
+                    int roofY = base + 4 + (3 - Math.abs(x));
                     addGenericBlockData(world, arena, edits, cx + x, roofY, cz + z,
                             Bukkit.createBlockData("minecraft:" + roofStair.name().toLowerCase(java.util.Locale.ROOT)
                                     + "[facing=" + facing + ",half=bottom,shape=straight,waterlogged=false]"));
