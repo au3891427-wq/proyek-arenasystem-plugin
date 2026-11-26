@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "compatibilityLevel": "JAVA_25",
+  "package": "id.hadziq.arenasystem.client.mixin",
+  "mixins": [
+    "KeyBindsScreenAccessor",
+    "KeyMappingAccessor",
+    "KeyBindsScreenMixin",
+    "ButtonMixin",
+    "KeyMappingMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
