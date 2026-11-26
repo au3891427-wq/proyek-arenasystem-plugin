@@ -37,6 +37,7 @@ final class ArenaGenerator {
         } else {
             buildTeamDeathmatch(world, arena, terrain, edits, seed, radius, teamCount);
         }
+        buildGenericStructures(world, arena, terrain, edits, seed, radius);
         buildPerimeter(world, arena, terrain, edits, radius);
         return new ArrayList<>(edits.values());
     }
@@ -464,6 +465,140 @@ final class ArenaGenerator {
                 addAir(world, arena, edits, x, baseY + y, z,
                         y == height ? Material.CHISELED_STONE_BRICKS : material);
             }
+        }
+    }
+
+
+    /**
+     * Adds seed-deterministic environmental structures in mirrored quadrants.
+     * Their footprints avoid the objective, lanes, active spawns and existing
+     * gameplay edits. They remain ordinary BlockEdits in the arena snapshot plan.
+     */
+    private static void buildGenericStructures(World world, ArenaData arena, TerrainProfile terrain,
+                                               Map<BlockPos, BlockEdit> edits, long seed, int radius) {
+        boolean relic = "relic_rush".equalsIgnoreCase(arena.mode);
+        int siteX = Math.min(radius - 9, relic ? 39 : 29);
+        int siteZ = Math.min(radius - 10, relic ? 34 : 20);
+        if (siteX < 10 || siteZ < 10) return;
+        if (!isGenericRegionSafe(arena, siteX, siteZ, relic)) return;
+
+        Random random = new Random(seed ^ 0x47454E5354525543L);
+        int template = random.nextInt(3);
+        Material wall = switch (random.nextInt(3)) {
+            case 0 -> Material.STONE_BRICKS;
+            case 1 -> Material.MOSSY_STONE_BRICKS;
+            default -> Material.COBBLESTONE;
+        };
+
+        for (int sx : new int[]{-1, 1}) {
+            for (int sz : new int[]{-1, 1}) {
+                int x = sx * siteX;
+                int z = sz * siteZ;
+                if (!isGenericSiteClear(world, arena, terrain, edits, x, z, template)) continue;
+                if (template == 0) buildGenericCabin(world, arena, terrain, edits, x, z, wall);
+                else if (template == 1) buildGenericTower(world, arena, terrain, edits, x, z, wall);
+                else buildGenericRuin(world, arena, terrain, edits, x, z, wall);
+            }
+        }
+    }
+
+    private static boolean isGenericRegionSafe(ArenaData arena, int x, int z, boolean relic) {
+        if (x <= 8 || z <= 8) return false;
+        if (relic) {
+            if (Math.abs(x - 18) <= 5 || Math.abs(z - 18) <= 5) return false;
+        } else if (x <= 5 || z <= 5) return false;
+        for (int[] spawn : SeededTerrainBlender.anchors(arena.spawnOffset, relic ? 2 : 4)) {
+            int dx = Math.max(0, Math.abs(x - spawn[0]) - 7);
+            int dz = Math.max(0, Math.abs(z - spawn[1]) - 7);
+            if (dx + dz < 8) return false;
+        }
+        return true;
+    }
+
+    private static boolean isGenericSiteClear(World world, ArenaData arena, TerrainProfile terrain,
+                                              Map<BlockPos, BlockEdit> edits, int cx, int cz, int template) {
+        int half = template == 1 ? 2 : 3;
+        int height = template == 1 ? 5 : 3;
+        int minY = Integer.MAX_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        for (int x = cx - half; x <= cx + half; x++) {
+            for (int z = cz - half; z <= cz + half; z++) {
+                if (Math.abs(x) > terrain.radius() - 3 || Math.abs(z) > terrain.radius() - 3) return false;
+                int surface = terrain.heightAt(x, z);
+                minY = Math.min(minY, surface);
+                maxY = Math.max(maxY, surface);
+                for (int dy = 1; dy <= height; dy++) {
+                    BlockPos pos = new BlockPos(x, surface + dy - arena.centerY, z);
+                    BlockEdit planned = edits.get(pos);
+                    if (planned != null) {
+                        if (planned.material.isAir() || !planned.material.isSolid()) continue;
+                        return false;
+                    }
+                    Block block = world.getBlockAt(arena.centerX + x, surface + dy, arena.centerZ + z);
+                    if (block.getState() instanceof TileState || !block.isPassable()) return false;
+                }
+            }
+        }
+        return maxY - minY <= 2;
+    }
+
+    private static void buildGenericCabin(World world, ArenaData arena, TerrainProfile terrain,
+                                          Map<BlockPos, BlockEdit> edits, int cx, int cz, Material wall) {
+        for (int x = -3; x <= 3; x++) {
+            for (int z = -3; z <= 3; z++) {
+                addSurface(world, arena, terrain, edits, cx + x, cz + z,
+                        Math.abs(x) == 3 || Math.abs(z) == 3 ? Material.COBBLESTONE : Material.SPRUCE_PLANKS);
+                if (Math.abs(x) != 3 && Math.abs(z) != 3) continue;
+                int base = terrain.heightAt(cx + x, cz + z) - arena.centerY;
+                for (int y = 1; y <= 2; y++) {
+                    boolean doorway = z == 3 && x == 0;
+                    boolean window = y == 2 && ((Math.abs(x) == 3 && z == 0) || (z == -3 && x == -2));
+                    if (!doorway && !window) addAir(world, arena, edits, cx + x, base + y, cz + z, wall);
+                }
+            }
+        }
+        for (int x = -3; x <= 3; x++) for (int z = -3; z <= 3; z++) {
+            int y = terrain.heightAt(cx + x, cz + z) - arena.centerY + 3;
+            addAir(world, arena, edits, cx + x, y, cz + z, Material.SPRUCE_SLAB);
+        }
+    }
+
+    private static void buildGenericTower(World world, ArenaData arena, TerrainProfile terrain,
+                                          Map<BlockPos, BlockEdit> edits, int cx, int cz, Material wall) {
+        for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) {
+            if (Math.abs(x) != 2 && Math.abs(z) != 2) continue;
+            int base = terrain.heightAt(cx + x, cz + z) - arena.centerY;
+            for (int y = 1; y <= 4; y++) {
+                addAir(world, arena, edits, cx + x, base + y, cz + z,
+                        y == 4 ? Material.STONE_BRICK_WALL : wall);
+            }
+        }
+        for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) {
+            int y = terrain.heightAt(cx + x, cz + z) - arena.centerY + 4;
+            addAir(world, arena, edits, cx + x, y, cz + z, Material.SPRUCE_SLAB);
+        }
+    }
+
+    private static void buildGenericRuin(World world, ArenaData arena, TerrainProfile terrain,
+                                         Map<BlockPos, BlockEdit> edits, int cx, int cz, Material wall) {
+        for (int offset = -3; offset <= 3; offset++) {
+            if (offset == 0) continue;
+            addGenericRuinColumn(world, arena, terrain, edits, cx + offset, cz - 3, wall,
+                    1 + Math.floorMod(offset, 3));
+            addGenericRuinColumn(world, arena, terrain, edits, cx + offset, cz + 3, wall,
+                    1 + Math.floorMod(offset + 1, 3));
+        }
+        addGenericRuinColumn(world, arena, terrain, edits, cx - 3, cz, wall, 2);
+        addGenericRuinColumn(world, arena, terrain, edits, cx + 3, cz, wall, 2);
+    }
+
+    private static void addGenericRuinColumn(World world, ArenaData arena, TerrainProfile terrain,
+                                             Map<BlockPos, BlockEdit> edits, int x, int z,
+                                             Material material, int height) {
+        int base = terrain.heightAt(x, z) - arena.centerY;
+        for (int y = 1; y <= height; y++) {
+            addAir(world, arena, edits, x, base + y, z,
+                    y == height ? Material.CHISELED_STONE_BRICKS : material);
         }
     }
 
