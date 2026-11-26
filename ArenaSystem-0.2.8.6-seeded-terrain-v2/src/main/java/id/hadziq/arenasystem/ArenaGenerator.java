@@ -486,8 +486,10 @@ final class ArenaGenerator {
                                                Map<BlockPos, BlockEdit> edits, long seed, int radius,
                                                int teamCount) {
         boolean relic = "relic_rush".equalsIgnoreCase(arena.mode);
-        int siteX = Math.min(radius - 9, relic ? 39 : 29);
-        int siteZ = Math.min(radius - 10, relic ? 34 : 20);
+        // TDM village sites sit in the outer diagonal pockets, away from the
+        // seeded midfield cover band (x=8..24, z=7..23).
+        int siteX = Math.min(radius - 9, relic ? 39 : 31);
+        int siteZ = Math.min(radius - 10, relic ? 34 : 30);
         if (siteX < 10 || siteZ < 10) return;
         if (!isGenericRegionSafe(arena, siteX, siteZ, relic, teamCount)) return;
 
@@ -500,27 +502,37 @@ final class ArenaGenerator {
             default -> Material.COBBLESTONE;
         };
 
-        // Two sites receive one template and the opposite diagonal pair receives
-        // the other. This preserves rotational symmetry while creating variety.
-        for (int sx : new int[]{-1, 1}) {
-            for (int sz : new int[]{-1, 1}) {
-                int template = sx == sz ? firstTemplate : secondTemplate;
-                if (!isGenericSiteClear(world, arena, terrain, edits,
-                        sx * siteX, sz * siteZ, template)) return;
+        // Keep opposite sites paired for fairness, but validate each pair
+        // independently. One blocked pair must not cancel the other pair.
+        int[][] sites = {
+                {-siteX, -siteZ}, {siteX, siteZ},
+                {-siteX, siteZ}, {siteX, -siteZ}
+        };
+        int[] templates = {firstTemplate, firstTemplate, secondTemplate, secondTemplate};
+        for (int i = 0; i < sites.length; i += 2) {
+            int[] first = sites[i];
+            int[] opposite = sites[i + 1];
+            int template = templates[i];
+            if (!isGenericSiteClear(world, arena, terrain, edits,
+                    first[0], first[1], template)
+                    || !isGenericSiteClear(world, arena, terrain, edits,
+                    opposite[0], opposite[1], template)) {
+                continue;
             }
+            buildGenericStructure(world, arena, terrain, edits, first[0], first[1], template, wall);
+            buildGenericStructure(world, arena, terrain, edits,
+                    opposite[0], opposite[1], template, wall);
         }
-        for (int sx : new int[]{-1, 1}) {
-            for (int sz : new int[]{-1, 1}) {
-                int x = sx * siteX;
-                int z = sz * siteZ;
-                int template = sx == sz ? firstTemplate : secondTemplate;
-                switch (template) {
-                    case 0 -> buildGenericCabin(world, arena, terrain, edits, x, z, wall);
-                    case 1 -> buildGenericStoneHouse(world, arena, terrain, edits, x, z, wall);
-                    case 2 -> buildGenericTower(world, arena, terrain, edits, x, z, wall);
-                    default -> buildGenericRuin(world, arena, terrain, edits, x, z, wall);
-                }
-            }
+    }
+
+    private static void buildGenericStructure(World world, ArenaData arena, TerrainProfile terrain,
+                                              Map<BlockPos, BlockEdit> edits, int x, int z,
+                                              int template, Material wall) {
+        switch (template) {
+            case 0 -> buildGenericCabin(world, arena, terrain, edits, x, z, wall);
+            case 1 -> buildGenericStoneHouse(world, arena, terrain, edits, x, z, wall);
+            case 2 -> buildGenericTower(world, arena, terrain, edits, x, z, wall);
+            default -> buildGenericRuin(world, arena, terrain, edits, x, z, wall);
         }
     }
 
