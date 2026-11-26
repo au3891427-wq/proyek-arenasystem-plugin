@@ -665,7 +665,7 @@ final class ArenaGenerator {
                 Bukkit.createBlockData("minecraft:oak_stairs[facing=east,half=bottom,shape=straight,waterlogged=false]"));
         addGenericBlockData(world, arena, edits, cx + 1, base + 1, cz,
                 Bukkit.createBlockData("minecraft:oak_stairs[facing=west,half=bottom,shape=straight,waterlogged=false]"));
-        addAir(world, arena, edits, cx, base + 1, cz + 2, Material.CARPET);
+        addAir(world, arena, edits, cx, base + 1, cz + 2, Material.WHITE_CARPET);
     }
 
     private static void buildGenericTower(World world, ArenaData arena, TerrainProfile terrain,
@@ -712,7 +712,8 @@ final class ArenaGenerator {
         Block block = world.getBlockAt(arena.centerX + x, arena.centerY + y, arena.centerZ + z);
         if (block.getState() instanceof TileState) return;
         BlockEdit planned = edits.get(new BlockPos(x, y, z));
-        if (planned != null && !planned.material.isAir() && planned.material.isSolid()\n                && planned.material != blockData.getMaterial()) return;
+        if (planned != null && !planned.material.isAir() && planned.material.isSolid()
+                && planned.material != blockData.getMaterial()) return;
         if (planned == null && !block.isPassable()) return;
         edits.put(new BlockPos(x, y, z), new BlockEdit(x, y, z, blockData));
     }
