@@ -2,7 +2,7 @@ name: Build Paper 26.3 Plugin (JDK 25 + Maven 3.10.2)
 
 on:
   push:
-    branches: [ main, feature/generic-seeded-structures ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
