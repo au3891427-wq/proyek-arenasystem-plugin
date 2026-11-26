@@ -18,7 +18,7 @@ public final class KeybindModifierMatcher {
         return requiredModifiers == 0 || matchesExactly(activeModifiers, requiredModifiers);
     }
 
-    static boolean bindingsConflict(boolean sameKey, int firstModifiers, int secondModifiers) {
+    public static boolean bindingsConflict(boolean sameKey, int firstModifiers, int secondModifiers) {
         return sameKey && firstModifiers == secondModifiers;
     }
 
