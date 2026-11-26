@@ -611,11 +611,13 @@ final class ArenaGenerator {
 
     private static boolean isGenericRegionSafe(ArenaData arena, int x, int z,
                                                boolean relic, int teamCount) {
-        if (x <= 8 || z <= 8) return false;
+        int absX = Math.abs(x);
+        int absZ = Math.abs(z);
+        if (absX <= 8 || absZ <= 8) return false;
         if (relic) {
             int sideLane = (int) Math.round(18.0D * arena.radius / 40.0D);
-            if (Math.abs(x - sideLane) <= 5 || Math.abs(z - sideLane) <= 5) return false;
-        } else if (x <= 5 || z <= 5) return false;
+            if (Math.abs(absX - sideLane) <= 5 || Math.abs(absZ - sideLane) <= 5) return false;
+        }
         for (int[] spawn : SeededTerrainBlender.anchors(arena.spawnOffset, teamCount)) {
             int dx = Math.max(0, Math.abs(x - spawn[0]) - 7);
             int dz = Math.max(0, Math.abs(z - spawn[1]) - 7);
