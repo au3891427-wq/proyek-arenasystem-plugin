@@ -31,6 +31,22 @@ abstract class KeyMappingMixin {
         ArenaSystemKeybinds.captureModifiersForKey(key, modifiers);
     }
 
+    @Inject(method = "same", at = @At("RETURN"), cancellable = true)
+    private void arenasystem$compareManagedModifierChords(KeyMapping other, CallbackInfoReturnable<Boolean> callback) {
+        if (!KeybindChordConfig.isManaged(getName()) || !KeybindChordConfig.isManaged(other.getName())) {
+            return;
+        }
+
+        InputConstants.Key thisKey = ((KeyMappingAccessor) this).arenasystem$getBoundKey();
+        InputConstants.Key otherKey = ((KeyMappingAccessor) other).arenasystem$getBoundKey();
+        boolean conflict = KeybindModifierMatcher.bindingsConflict(
+            thisKey.equals(otherKey),
+            KeybindChordConfig.getRequiredModifiers(getName()),
+            KeybindChordConfig.getRequiredModifiers(other.getName())
+        );
+        callback.setReturnValue(conflict);
+    }
+
     @Inject(method = "getTranslatedKeyMessage", at = @At("RETURN"), cancellable = true)
     private void arenasystem$appendModifierLabels(CallbackInfoReturnable<Component> callback) {
         int modifiers = KeybindChordConfig.getRequiredModifiers(getName());
