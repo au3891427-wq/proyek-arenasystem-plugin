@@ -1024,7 +1024,7 @@ public final class ArenaSystemPlugin extends JavaPlugin implements Listener {
                         world.getBlockAt(data.centerX + edit.position.x,
                                         data.centerY + edit.position.y,
                                         data.centerZ + edit.position.z)
-                                .setType(edit.material, false);
+                                .setBlockData(edit.blockData != null ? edit.blockData.clone() : Bukkit.createBlockData(edit.material), false);
                     }
                     if (index >= edits.size()) {
                         cancel();

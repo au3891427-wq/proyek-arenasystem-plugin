@@ -1,9 +1,11 @@
 package id.hadziq.arenasystem;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.TileState;
+import org.bukkit.block.data.BlockData;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -37,6 +39,7 @@ final class ArenaGenerator {
         } else {
             buildTeamDeathmatch(world, arena, terrain, edits, seed, radius, teamCount);
         }
+        buildGenericStructures(world, arena, terrain, edits, seed, radius, teamCount);
         buildPerimeter(world, arena, terrain, edits, radius);
         return new ArrayList<>(edits.values());
     }
@@ -465,6 +468,332 @@ final class ArenaGenerator {
                         y == height ? Material.CHISELED_STONE_BRICKS : material);
             }
         }
+    }
+
+
+    /**
+     * Adds seed-deterministic environmental structures in mirrored quadrants.
+     * Their footprints avoid the objective, lanes, active spawns and existing
+     * gameplay edits. They remain ordinary BlockEdits in the arena snapshot plan.
+     */
+    /**
+     * Seeded village set. Two distinct templates are selected per seed and
+     * distributed as opposite pairs (180-degree symmetry), so the four
+     * quadrants receive a balanced mix instead of four copies of one template.
+     * Every placement is preflighted before any structure is queued.
+     */
+    private static void buildGenericStructures(World world, ArenaData arena, TerrainProfile terrain,
+                                               Map<BlockPos, BlockEdit> edits, long seed, int radius,
+                                               int teamCount) {
+        boolean relic = "relic_rush".equalsIgnoreCase(arena.mode);
+        Random random = new Random(seed ^ 0x47454E5354525543L);
+        Material wall = switch (random.nextInt(3)) {
+            case 0 -> Material.STONE_BRICKS;
+            case 1 -> Material.MOSSY_STONE_BRICKS;
+            default -> Material.COBBLESTONE;
+        };
+        NavigationScanner navigation = NavigationScanner.scan(arena, terrain, edits);
+        int targetPairs = relic ? 4 : 3;
+        int placedPairs = 0;
+
+        for (int[] candidate : genericStructureCandidates(radius, relic, random, navigation)) {
+            if (placedPairs >= targetPairs) break;
+            int x = candidate[0];
+            int z = candidate[1];
+            int template = random.nextInt(2);
+            int[][] pair = candidate[2] == 0
+                    ? new int[][]{{-x, -z}, {x, z}}
+                    : new int[][]{{-x, z}, {x, -z}};
+            if (!isGenericRegionSafe(arena, pair[0][0], pair[0][1], relic, teamCount)
+                    || !isGenericRegionSafe(arena, pair[1][0], pair[1][1], relic, teamCount)) {
+                continue;
+            }
+            if (!isGenericSiteClear(world, arena, terrain, edits, pair[0][0], pair[0][1], template)
+                    || !isGenericSiteClear(world, arena, terrain, edits, pair[1][0], pair[1][1], template)) {
+                continue;
+            }
+
+            Map<BlockPos, BlockEdit> beforePair = new LinkedHashMap<>(edits);
+            buildGenericStructure(world, arena, terrain, edits,
+                    pair[0][0], pair[0][1], template, wall);
+            buildGenericStructure(world, arena, terrain, edits,
+                    pair[1][0], pair[1][1], template, wall);
+
+            boolean housesAccessible = isGenericHouseAccessible(world, arena, terrain, edits,
+                    pair[0][0], pair[0][1]) && isGenericHouseAccessible(world, arena, terrain, edits,
+                    pair[1][0], pair[1][1]);
+            // Relic Rush may use the main lane as a deliberate chokepoint, but
+            // never at the cost of disconnecting either team's altar route.
+            boolean routesConnected = !relic
+                    || NavigationScanner.hasRelicRoutes(arena, terrain, edits, arena.spawnOffset);
+            if (!housesAccessible || !routesConnected) {
+                edits.clear();
+                edits.putAll(beforePair);
+                continue;
+            }
+            placedPairs++;
+        }
+    }
+
+    private static List<int[]> genericStructureCandidates(int radius, boolean relic, Random random,
+                                                          NavigationScanner navigation) {
+        List<int[]> candidates = new ArrayList<>();
+        int min = 10;
+        int max = Math.max(min, radius - 10);
+        for (int x = min; x <= max; x++) {
+            for (int z = min; z <= max; z++) {
+                // TDM keeps its detected main and cross lanes clear. Relic Rush
+                // deliberately permits structures on its main lane; connectivity
+                // is validated after every mirrored pair is planned.
+                if (!relic && (navigation.isNearMainPath(x, z, 4)
+                        || navigation.isNearMainPath(-x, -z, 4))) continue;
+                candidates.add(new int[]{x, z, random.nextBoolean() ? 1 : 0});
+            }
+        }
+
+        for (int i = candidates.size() - 1; i > 0; i--) {
+            int j = random.nextInt(i + 1);
+            int[] value = candidates.get(i);
+            candidates.set(i, candidates.get(j));
+            candidates.set(j, value);
+        }
+        return candidates;
+    }
+
+    private static void buildGenericStructure(World world, ArenaData arena, TerrainProfile terrain,
+                                              Map<BlockPos, BlockEdit> edits, int x, int z,
+                                              int template, Material wall) {
+        switch (template) {
+            case 0 -> buildGenericCabin(world, arena, terrain, edits, x, z, wall);
+            case 1 -> buildGenericStoneHouse(world, arena, terrain, edits, x, z, wall);
+            case 2 -> buildGenericTower(world, arena, terrain, edits, x, z, wall);
+            default -> buildGenericRuin(world, arena, terrain, edits, x, z, wall);
+        }
+    }
+
+    private static boolean isGenericHouseAccessible(World world, ArenaData arena, TerrainProfile terrain,
+                                                     Map<BlockPos, BlockEdit> edits, int cx, int cz) {
+        int doorY = terrain.heightAt(cx, cz + 3) - arena.centerY + 1;
+        BlockEdit lowerDoor = edits.get(new BlockPos(cx, doorY, cz + 3));
+        BlockEdit upperDoor = edits.get(new BlockPos(cx, doorY + 1, cz + 3));
+        if (lowerDoor == null || upperDoor == null
+                || !lowerDoor.material.name().endsWith("_DOOR")
+                || !upperDoor.material.name().endsWith("_DOOR")) return false;
+        return hasTwoBlockClearance(world, arena, terrain, edits, cx, cz + 2)
+                && hasTwoBlockClearance(world, arena, terrain, edits, cx, cz + 4);
+    }
+
+    private static boolean hasTwoBlockClearance(World world, ArenaData arena, TerrainProfile terrain,
+                                                 Map<BlockPos, BlockEdit> edits, int x, int z) {
+        int surfaceY = terrain.heightAt(x, z);
+        for (int dy = 1; dy <= 2; dy++) {
+            int relativeY = surfaceY + dy - arena.centerY;
+            BlockEdit planned = edits.get(new BlockPos(x, relativeY, z));
+            if (planned != null) {
+                if (planned.material.isAir() || !planned.material.isSolid()
+                        || planned.material.name().endsWith("_DOOR")) continue;
+                return false;
+            }
+            if (!world.getBlockAt(arena.centerX + x, surfaceY + dy, arena.centerZ + z).isPassable()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isGenericRegionSafe(ArenaData arena, int x, int z,
+                                               boolean relic, int teamCount) {
+        int absX = Math.abs(x);
+        int absZ = Math.abs(z);
+        if (absX <= 8 || absZ <= 8) return false;
+        // Relic Rush intentionally allows buildings to occupy primary lanes.
+        // Post-placement navigation validation preserves routes to the altar.
+        for (int[] spawn : SeededTerrainBlender.anchors(arena.spawnOffset, teamCount)) {
+            int dx = Math.max(0, Math.abs(x - spawn[0]) - 7);
+            int dz = Math.max(0, Math.abs(z - spawn[1]) - 7);
+            if (dx + dz < 8) return false;
+        }
+        return true;
+    }
+
+    private static boolean isGenericSiteClear(World world, ArenaData arena, TerrainProfile terrain,
+                                              Map<BlockPos, BlockEdit> edits, int cx, int cz, int template) {
+        int half = template == 2 ? 2 : 3;
+        int height = template == 2 ? 5 : template == 3 ? 3 : 7;
+        int minY = Integer.MAX_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        for (int x = cx - half; x <= cx + half; x++) {
+            for (int z = cz - half; z <= cz + half; z++) {
+                if (Math.abs(x) > terrain.radius() - 3 || Math.abs(z) > terrain.radius() - 3) return false;
+                int surface = terrain.heightAt(x, z);
+                minY = Math.min(minY, surface);
+                maxY = Math.max(maxY, surface);
+                for (int dy = 1; dy <= height; dy++) {
+                    int worldY = surface + dy;
+                    if (worldY < world.getMinHeight() || worldY >= world.getMaxHeight()) return false;
+                    BlockPos pos = new BlockPos(x, worldY - arena.centerY, z);
+                    BlockEdit planned = edits.get(pos);
+                    if (planned != null) {
+                        if (planned.material.isAir() || !planned.material.isSolid()) continue;
+                        return false;
+                    }
+                    Block block = world.getBlockAt(arena.centerX + x, worldY, arena.centerZ + z);
+                    if (block.getState() instanceof TileState || !block.isPassable()) return false;
+                }
+            }
+        }
+        // A near-level footprint keeps the floor, threshold and two-block door aligned.
+        return maxY - minY <= 1;
+    }
+
+    /** Wooden village house: usable two-block door, glass windows, furnished interior and pitched roof. */
+    private static void buildGenericCabin(World world, ArenaData arena, TerrainProfile terrain,
+                                          Map<BlockPos, BlockEdit> edits, int cx, int cz, Material wall) {
+        buildGenericHouseShell(world, arena, terrain, edits, cx, cz,
+                Material.SPRUCE_PLANKS, Material.COBBLESTONE, Material.SPRUCE_DOOR,
+                Material.SPRUCE_STAIRS, Material.SPRUCE_SLAB, wall);
+        addGenericInterior(world, arena, terrain, edits, cx, cz, Material.SPRUCE_PLANKS);
+    }
+
+    /** Stone village house variant with a contrasting timber frame and stone roof. */
+    private static void buildGenericStoneHouse(World world, ArenaData arena, TerrainProfile terrain,
+                                               Map<BlockPos, BlockEdit> edits, int cx, int cz, Material wall) {
+        buildGenericHouseShell(world, arena, terrain, edits, cx, cz,
+                Material.STONE_BRICKS, Material.MOSSY_STONE_BRICKS, Material.OAK_DOOR,
+                Material.STONE_BRICK_STAIRS, Material.STONE_BRICK_SLAB, wall);
+        addGenericInterior(world, arena, terrain, edits, cx, cz, Material.OAK_PLANKS);
+        for (int z : new int[]{-2, 2}) {
+            int y = terrain.heightAt(cx, cz + z) - arena.centerY + 3;
+            addAir(world, arena, edits, cx, y, cz + z, Material.STRIPPED_OAK_LOG);
+        }
+    }
+
+    private static void buildGenericHouseShell(World world, ArenaData arena, TerrainProfile terrain,
+                                               Map<BlockPos, BlockEdit> edits, int cx, int cz,
+                                               Material floor, Material foundation, Material doorMaterial,
+                                               Material roofStair, Material roofSlab, Material wall) {
+        // 7x7 footprint and continuous floor; perimeter foundation follows the terrain profile.
+        for (int x = -3; x <= 3; x++) {
+            for (int z = -3; z <= 3; z++) {
+                addSurface(world, arena, terrain, edits, cx + x, cz + z,
+                        Math.abs(x) == 3 || Math.abs(z) == 3 ? foundation : floor);
+            }
+        }
+
+        for (int x = -3; x <= 3; x++) {
+            for (int z = -3; z <= 3; z++) {
+                if (Math.abs(x) != 3 && Math.abs(z) != 3) continue;
+                int base = terrain.heightAt(cx + x, cz + z) - arena.centerY;
+                for (int y = 1; y <= 3; y++) {
+                    boolean doorway = z == 3 && x == 0 && y <= 2;
+                    boolean sideWindow = Math.abs(x) == 3 && z == 0 && y == 2;
+                    boolean rearWindow = z == -3 && x == 0 && y == 2;
+                    if (doorway || sideWindow || rearWindow) continue;
+                    addAir(world, arena, edits, cx + x, base + y, cz + z, wall);
+                }
+                if (Math.abs(x) == 3 && z == 0) {
+                    addGenericBlockData(world, arena, edits, cx + x, base + 2, cz + z,
+                            Bukkit.createBlockData("minecraft:glass_pane"));
+                }
+                if (z == -3 && x == 0) {
+                    addGenericBlockData(world, arena, edits, cx + x, base + 2, cz + z,
+                            Bukkit.createBlockData("minecraft:glass_pane"));
+                }
+            }
+        }
+
+        // Door is explicitly represented as lower + upper BlockData, not a lone Material.
+        int doorY = terrain.heightAt(cx, cz + 3) - arena.centerY + 1;
+        addGenericBlockData(world, arena, edits, cx, doorY, cz + 3,
+                Bukkit.createBlockData("minecraft:" + doorMaterial.name().toLowerCase(java.util.Locale.ROOT)
+                        + "[facing=south,half=lower,hinge=left,open=false,powered=false]"));
+        addGenericBlockData(world, arena, edits, cx, doorY + 1, cz + 3,
+                Bukkit.createBlockData("minecraft:" + doorMaterial.name().toLowerCase(java.util.Locale.ROOT)
+                        + "[facing=south,half=upper,hinge=left,open=false,powered=false]"));
+
+        // Gable roof: mirrored stair slopes meet at a continuous ridge.
+        for (int z = -3; z <= 3; z++) {
+            for (int x = -3; x <= 3; x++) {
+                int base = terrain.heightAt(cx + x, cz + z) - arena.centerY;
+                if (x == 0) {
+                    addAir(world, arena, edits, cx + x, base + 6, cz + z, roofSlab);
+                } else {
+                    String facing = x < 0 ? "west" : "east";
+                    int roofY = base + 4 + (3 - Math.abs(x));
+                    addGenericBlockData(world, arena, edits, cx + x, roofY, cz + z,
+                            Bukkit.createBlockData("minecraft:" + roofStair.name().toLowerCase(java.util.Locale.ROOT)
+                                    + "[facing=" + facing + ",half=bottom,shape=straight,waterlogged=false]"));
+                }
+            }
+        }
+    }
+
+    private static void addGenericInterior(World world, ArenaData arena, TerrainProfile terrain,
+                                           Map<BlockPos, BlockEdit> edits, int cx, int cz, Material floor) {
+        int base = terrain.heightAt(cx, cz) - arena.centerY;
+        // Furniture is deliberately made from ordinary blocks (no inventories or tile entities),
+        // so the existing BlockData snapshot can restore every part safely.
+        addAir(world, arena, edits, cx - 2, base + 1, cz - 2, Material.BOOKSHELF);
+        addAir(world, arena, edits, cx + 2, base + 1, cz - 2, Material.CRAFTING_TABLE);
+        addAir(world, arena, edits, cx - 2, base + 1, cz + 1, Material.BOOKSHELF);
+        addAir(world, arena, edits, cx + 2, base + 1, cz + 1, Material.COBBLESTONE_WALL);
+        addAir(world, arena, edits, cx, base + 1, cz, Material.OAK_FENCE);
+        addAir(world, arena, edits, cx, base + 2, cz, Material.LANTERN);
+        addGenericBlockData(world, arena, edits, cx - 1, base + 1, cz,
+                Bukkit.createBlockData("minecraft:oak_stairs[facing=east,half=bottom,shape=straight,waterlogged=false]"));
+        addGenericBlockData(world, arena, edits, cx + 1, base + 1, cz,
+                Bukkit.createBlockData("minecraft:oak_stairs[facing=west,half=bottom,shape=straight,waterlogged=false]"));
+        addAir(world, arena, edits, cx, base + 1, cz + 2, Material.WHITE_CARPET);
+    }
+
+    private static void buildGenericTower(World world, ArenaData arena, TerrainProfile terrain,
+                                          Map<BlockPos, BlockEdit> edits, int cx, int cz, Material wall) {
+        for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) {
+            if (Math.abs(x) != 2 && Math.abs(z) != 2) continue;
+            int base = terrain.heightAt(cx + x, cz + z) - arena.centerY;
+            for (int y = 1; y <= 4; y++) {
+                addAir(world, arena, edits, cx + x, base + y, cz + z,
+                        y == 4 ? Material.STONE_BRICK_WALL : wall);
+            }
+        }
+        for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) {
+            int y = terrain.heightAt(cx + x, cz + z) - arena.centerY + 4;
+            addAir(world, arena, edits, cx + x, y, cz + z, Material.SPRUCE_SLAB);
+        }
+    }
+
+    private static void buildGenericRuin(World world, ArenaData arena, TerrainProfile terrain,
+                                         Map<BlockPos, BlockEdit> edits, int cx, int cz, Material wall) {
+        for (int offset = -3; offset <= 3; offset++) {
+            if (offset == 0) continue;
+            addGenericRuinColumn(world, arena, terrain, edits, cx + offset, cz - 3, wall,
+                    1 + Math.floorMod(offset, 3));
+            addGenericRuinColumn(world, arena, terrain, edits, cx + offset, cz + 3, wall,
+                    1 + Math.floorMod(offset + 1, 3));
+        }
+        addGenericRuinColumn(world, arena, terrain, edits, cx - 3, cz, wall, 2);
+        addGenericRuinColumn(world, arena, terrain, edits, cx + 3, cz, wall, 2);
+    }
+
+    private static void addGenericRuinColumn(World world, ArenaData arena, TerrainProfile terrain,
+                                             Map<BlockPos, BlockEdit> edits, int x, int z,
+                                             Material material, int height) {
+        int base = terrain.heightAt(x, z) - arena.centerY;
+        for (int y = 1; y <= height; y++) {
+            addAir(world, arena, edits, x, base + y, z,
+                    y == height ? Material.CHISELED_STONE_BRICKS : material);
+        }
+    }
+
+    private static void addGenericBlockData(World world, ArenaData arena, Map<BlockPos, BlockEdit> edits,
+                                            int x, int y, int z, BlockData blockData) {
+        Block block = world.getBlockAt(arena.centerX + x, arena.centerY + y, arena.centerZ + z);
+        if (block.getState() instanceof TileState) return;
+        BlockEdit planned = edits.get(new BlockPos(x, y, z));
+        if (planned != null && !planned.material.isAir() && planned.material.isSolid()
+                && planned.material != blockData.getMaterial()) return;
+        if (planned == null && !block.isPassable()) return;
+        edits.put(new BlockPos(x, y, z), new BlockEdit(x, y, z, blockData));
     }
 
     private static void buildPerimeter(World world, ArenaData arena, TerrainProfile terrain,
