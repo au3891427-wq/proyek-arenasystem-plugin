@@ -488,107 +488,57 @@ final class ArenaGenerator {
         boolean relic = "relic_rush".equalsIgnoreCase(arena.mode);
         Random random = new Random(seed ^ 0x47454E5354525543L);
         int houseTemplate = random.nextBoolean() ? 0 : 1;
-        int secondaryTemplate = random.nextInt(3) == 0 ? 3 : 2;
         Material wall = switch (random.nextInt(3)) {
             case 0 -> Material.STONE_BRICKS;
             case 1 -> Material.MOSSY_STONE_BRICKS;
             default -> Material.COBBLESTONE;
         };
 
-        // Candidate pockets are searched from the outside inward. The list is
-        // deterministic for a seed, while each accepted placement stays mirrored.
-        List<int[]> candidates = genericStructureCandidates(radius, relic, random);
-        int[] firstHouseSite = null;
-        for (int[] candidate : candidates) {
-            int siteX = candidate[0];
-            int siteZ = candidate[1];
-            int[][] sites = {
-                    {-siteX, -siteZ}, {siteX, siteZ},
-                    {-siteX, siteZ}, {siteX, -siteZ}
-            };
-
-            boolean allClear = true;
-            for (int[] site : sites) {
-                if (!isGenericRegionSafe(arena, site[0], site[1], relic, teamCount)
-                        || !isGenericSiteClear(world, arena, terrain, edits,
-                        site[0], site[1], houseTemplate)) {
-                    allClear = false;
-                    break;
-                }
+        // Candidate coordinates stay in the playable midfield, away from mode lanes.
+        // The order is seed-stable, but every placement is an opposite mirrored pair.
+        for (int[] candidate : genericStructureCandidates(radius, relic, random)) {
+            int x = candidate[0];
+            int z = candidate[1];
+            int[][] pair = {{-x, -z}, {x, z}};
+            if (!isGenericRegionSafe(arena, pair[0][0], pair[0][1], relic, teamCount)
+                    || !isGenericRegionSafe(arena, pair[1][0], pair[1][1], relic, teamCount)) {
+                continue;
             }
-            if (allClear) {
-                for (int[] site : sites) {
-                    buildGenericStructure(world, arena, terrain, edits,
-                            site[0], site[1], houseTemplate, wall);
-                }
-                firstHouseSite = candidate;
-                break;
+            if (!isGenericSiteClear(world, arena, terrain, edits, pair[0][0], pair[0][1], houseTemplate)
+                    || !isGenericSiteClear(world, arena, terrain, edits, pair[1][0], pair[1][1], houseTemplate)) {
+                continue;
             }
 
-            // If one quadrant is obstructed, retain fairness by accepting only
-            // a complete opposite pair; never let one blocked site cancel every site.
-            for (int pair = 0; pair < 2; pair++) {
-                int[] first = sites[pair * 2];
-                int[] opposite = sites[pair * 2 + 1];
-                if (!isGenericRegionSafe(arena, first[0], first[1], relic, teamCount)
-                        || !isGenericRegionSafe(arena, opposite[0], opposite[1], relic, teamCount)
-                        || !isGenericSiteClear(world, arena, terrain, edits,
-                        first[0], first[1], houseTemplate)
-                        || !isGenericSiteClear(world, arena, terrain, edits,
-                        opposite[0], opposite[1], houseTemplate)) {
-                    continue;
-                }
-                buildGenericStructure(world, arena, terrain, edits,
-                        first[0], first[1], houseTemplate, wall);
-                buildGenericStructure(world, arena, terrain, edits,
-                        opposite[0], opposite[1], houseTemplate, wall);
-                firstHouseSite = candidate;
-                break;
-            }
-            if (firstHouseSite != null) break;
-        }
-
-        if (firstHouseSite == null) return;
-
-        // A second mirrored pair adds variety, but is optional. It is kept far
-        // enough from the first pair to avoid overlapping 7x7 house footprints.
-        for (int[] candidate : candidates) {
-            if (Math.abs(candidate[0] - firstHouseSite[0])
-                    + Math.abs(candidate[1] - firstHouseSite[1]) < 10) continue;
-            int[][] sites = {
-                    {-candidate[0], -candidate[1]}, {candidate[0], candidate[1]},
-                    {-candidate[0], candidate[1]}, {candidate[0], -candidate[1]}
-            };
-            for (int pair = 0; pair < 2; pair++) {
-                int[] first = sites[pair * 2];
-                int[] opposite = sites[pair * 2 + 1];
-                if (!isGenericRegionSafe(arena, first[0], first[1], relic, teamCount)
-                        || !isGenericRegionSafe(arena, opposite[0], opposite[1], relic, teamCount)
-                        || !isGenericSiteClear(world, arena, terrain, edits,
-                        first[0], first[1], secondaryTemplate)
-                        || !isGenericSiteClear(world, arena, terrain, edits,
-                        opposite[0], opposite[1], secondaryTemplate)) {
-                    continue;
-                }
-                buildGenericStructure(world, arena, terrain, edits,
-                        first[0], first[1], secondaryTemplate, wall);
-                buildGenericStructure(world, arena, terrain, edits,
-                        opposite[0], opposite[1], secondaryTemplate, wall);
-                return;
-            }
+            buildGenericStructure(world, arena, terrain, edits,
+                    pair[0][0], pair[0][1], houseTemplate, wall);
+            buildGenericStructure(world, arena, terrain, edits,
+                    pair[1][0], pair[1][1], houseTemplate, wall);
+            return;
         }
     }
 
     private static List<int[]> genericStructureCandidates(int radius, boolean relic, Random random) {
         List<int[]> candidates = new ArrayList<>();
-        int minimum = relic ? 39 : 25;
-        int maximum = Math.min(radius - 5, relic ? 48 : 35);
-        for (int x = minimum; x <= maximum; x += 2) {
-            for (int z = minimum; z <= maximum; z += 2) {
-                candidates.add(new int[]{x, z});
+        if (relic) {
+            // Relic Rush has side lanes at roughly |z|=25 and cross-lanes at
+            // |x|=22/41 (for the standard radius 56). Use the inner diagonal
+            // pocket between the central and outer lanes, not the arena corners.
+            int minX = Math.max(30, (int) Math.ceil(radius * 0.60D));
+            int maxX = Math.min(radius - 15, (int) Math.floor(radius * 0.70D));
+            for (int x = minX; x <= maxX; x++) {
+                for (int z = 10; z <= 19; z++) candidates.add(new int[]{x, z});
+            }
+        } else {
+            // TDM midfield pocket, just outside the seeded cover/ruin cluster
+            // and diagonally offset from the four spawn pads.
+            int min = Math.max(25, (int) Math.ceil(radius * 0.62D));
+            int max = Math.min(radius - 7, (int) Math.floor(radius * 0.80D));
+            for (int x = min; x <= max; x++) {
+                for (int z = min; z <= max; z++) candidates.add(new int[]{x, z});
             }
         }
-        // Fisher-Yates gives deterministic variety without depending on world state.
+
+        // Shuffle only within the intended pocket; do not drift toward arena corners.
         for (int i = candidates.size() - 1; i > 0; i--) {
             int j = random.nextInt(i + 1);
             int[] value = candidates.get(i);
