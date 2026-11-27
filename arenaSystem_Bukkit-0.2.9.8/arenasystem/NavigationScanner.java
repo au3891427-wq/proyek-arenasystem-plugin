@@ -68,10 +68,15 @@ final class NavigationScanner {
         // menuju sel walkable terdekat dari altar, bukan ke blok monumen itu sendiri.
         int[] altarAccess = nearestWalkable(arena, terrain, edits, 0, 0, 8);
         if (altarAccess == null) {
+            Bukkit.getLogger().warning(
+                "[ArenaSystem][DEBUG] Relic Rush altarAccess=NONE; altarColumn=" 
+                    + describeColumn(arena, terrain, edits, 0, 0)
+            );
             return false;
         }
 
         int radius = terrain.radius();
+        boolean allTeamsValid = true;
         for (String team : RelicTeamLayout.teamNames(teamCount)) {
             int[] spawn = RelicTeamLayout.offset(team, teamCount, spawnOffset);
             double spawnLength = Math.hypot(spawn[0], spawn[1]);
@@ -89,16 +94,36 @@ final class NavigationScanner {
                     + " start=(" + startX + "," + startZ + ")"
                     + " startInBounds=" + startInBounds
                     + " startWalkable=" + startWalkable
+                    + " startColumn={" + describeColumn(arena, terrain, edits, startX, startZ) + "}"
                     + " altar=(" + altarAccess[0] + "," + altarAccess[1] + ")"
                     + " altarWalkable=" + goalWalkable
                     + " flow=" + flow
+                    + (flow < 2 ? " startFailureDetails=CHECK_COLUMN_AND_NEIGHBOR_HEIGHTS" : "")
             );
             if (flow < 2) {
-                return false;
+                allTeamsValid = false;
             }
         }
 
-        return true;
+        return allTeamsValid;
+    }
+
+    private static String describeColumn(
+        ArenaData arena, TerrainProfile terrain, Map<BlockPos, BlockEdit> edits, int x, int z
+    ) {
+        int surfaceY = terrain.heightAt(x, z);
+        StringBuilder result = new StringBuilder("surfaceY=").append(surfaceY);
+        for (int dy = 0; dy <= 2; dy++) {
+            BlockPos pos = new BlockPos(x, surfaceY + dy - arena.centerY, z);
+            BlockEdit planned = edits.get(pos);
+            result.append(",y").append(dy).append('=');
+            if (planned != null) {
+                result.append(planned.material.name()).append("(planned)");
+            } else {
+                result.append("NO_EDIT");
+            }
+        }
+        return result.toString();
     }
 
     /**
