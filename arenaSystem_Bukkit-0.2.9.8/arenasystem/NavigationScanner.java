@@ -3,7 +3,6 @@ package id.hadziq.arenasystem;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
-import org.bukkit.Bukkit;
 import org.bukkit.Material;
 
 // $VF: Compiled from NavigationScanner.java
@@ -71,30 +70,19 @@ final class NavigationScanner {
             return false;
         }
 
-        boolean allRoutesValid = true;
         for (String team : RelicTeamLayout.teamNames(teamCount)) {
             int[] spawn = RelicTeamLayout.offset(team, teamCount, spawnOffset);
-            int startX = spawn[0] - Integer.signum(spawn[0]) * 6;
-            int startZ = spawn[1] - Integer.signum(spawn[1]) * 6;
             double spawnLength = Math.hypot(spawn[0], spawn[1]);
-            int paintedStartX = (int)Math.round(spawn[0] - spawn[0] / spawnLength * 7.0);
-            int paintedStartZ = (int)Math.round(spawn[1] - spawn[1] / spawnLength * 7.0);
-            int flow = countVertexDisjointPaths(
+            int startX = (int)Math.round(spawn[0] - spawn[0] / spawnLength * 7.0);
+            int startZ = (int)Math.round(spawn[1] - spawn[1] / spawnLength * 7.0);
+            if (countVertexDisjointPaths(
                 arena, terrain, edits, startX, startZ, altarAccess[0], altarAccess[1]
-            );
-            Bukkit.getLogger().info(
-                "[ArenaSystem][DEBUG] Relic Rush team=" + team
-                    + " validatorStart=(" + startX + "," + startZ + ")"
-                    + " paintedStart=(" + paintedStartX + "," + paintedStartZ + ")"
-                    + " altarAccess=(" + altarAccess[0] + "," + altarAccess[1] + ")"
-                    + " flow=" + flow
-            );
-            if (flow < 2) {
-                allRoutesValid = false;
+            ) < 2) {
+                return false;
             }
         }
 
-        return allRoutesValid;
+        return true;
     }
 
     /**
