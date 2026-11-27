@@ -9,16 +9,19 @@
     <packaging>jar</packaging>
     <name>ArenaSystem</name>
     <description>Hybrid arena match plugin with client-driven Assassin off-hand input support.</description>
+
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
     </properties>
+
     <repositories>
         <repository>
             <id>papermc</id>
             <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
     </repositories>
+
     <dependencies>
         <dependency>
             <groupId>io.papermc.paper</groupId>
@@ -27,14 +30,25 @@
             <scope>provided</scope>
         </dependency>
     </dependencies>
+
     <build>
+        <sourceDirectory>${project.basedir}/arenasystem</sourceDirectory>
+        <resources>
+            <resource>
+                <directory>${project.basedir}/resources</directory>
+                <filtering>false</filtering>
+            </resource>
+        </resources>
         <finalName>arenaSystem_Bukkit-${project.version}</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
-                <configuration><release>25</release></configuration>
+                <configuration>
+                    <release>25</release>
+                    <encoding>UTF-8</encoding>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
