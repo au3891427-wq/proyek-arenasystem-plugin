@@ -602,7 +602,7 @@ final class ArenaGenerator {
                 }
             }
         }
-        return maxY - minY <= 2;
+        return maxY - minY <= 4;
     }
 
     /** Wooden village house: usable two-block door, glass windows, furnished interior and pitched roof. */
