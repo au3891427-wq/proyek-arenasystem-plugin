@@ -511,7 +511,7 @@ final class ArenaGenerator {
                 continue;
             }
 
-            Map<BlockPos, BlockEdit> beforePair = relic ? new LinkedHashMap<>(edits) : null;
+            Map<BlockPos, BlockEdit> beforePair = new LinkedHashMap<>(edits);
             buildGenericStructure(world, arena, terrain, edits,
                     pair[0][0], pair[0][1], template, wall);
             buildGenericStructure(world, arena, terrain, edits,
@@ -525,18 +525,8 @@ final class ArenaGenerator {
             boolean routesConnected = !relic
                     || NavigationScanner.hasRelicRoutes(arena, terrain, edits, arena.spawnOffset);
             if (!housesAccessible || !routesConnected) {
-                if (relic) {
-                    edits.clear();
-                    edits.putAll(beforePair);
-                } else {
-                    // TDM structures are added only after the route-clear scan;
-                    // failed door validation means this candidate is discarded.
-                    edits.entrySet().removeIf(entry ->
-                            (entry.getKey().x >= pair[0][0] - 3 && entry.getKey().x <= pair[0][0] + 3
-                                    && entry.getKey().z >= pair[0][1] - 3 && entry.getKey().z <= pair[0][1] + 3)
-                            || (entry.getKey().x >= pair[1][0] - 3 && entry.getKey().x <= pair[1][0] + 3
-                                    && entry.getKey().z >= pair[1][1] - 3 && entry.getKey().z <= pair[1][1] + 3));
-                }
+                edits.clear();
+                edits.putAll(beforePair);
                 continue;
             }
             placedPairs++;
