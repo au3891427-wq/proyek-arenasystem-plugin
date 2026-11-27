@@ -80,6 +80,9 @@ final class NavigationScanner {
         for (int x = -radius; x <= radius; x++) {
             for (int z = -radius; z <= radius; z++) {
                 if (!firstPath[x + radius][z + radius]) continue;
+                int fromStart = Math.abs(x - startX) + Math.abs(z - startZ);
+                int fromGoal = Math.abs(x - goalX) + Math.abs(z - goalZ);
+                if (fromStart <= 4 || fromGoal <= 4) continue;
                 for (int dx = -2; dx <= 2; dx++) {
                     for (int dz = -2; dz <= 2; dz++) {
                         int nx = x + dx, nz = z + dz;
