@@ -605,7 +605,8 @@ final class ArenaGenerator {
                 }
             }
         }
-        // A near-level footprint keeps the floor, threshold and two-block door aligned.\n        return maxY - minY <= 1;
+        // A near-level footprint keeps the floor, threshold and two-block door aligned.
+        return maxY - minY <= 1;
     }
 
     /** Wooden village house: usable two-block door, glass windows, furnished interior and pitched roof. */
