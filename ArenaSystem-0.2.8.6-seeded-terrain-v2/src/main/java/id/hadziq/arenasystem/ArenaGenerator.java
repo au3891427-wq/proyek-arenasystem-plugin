@@ -501,7 +501,9 @@ final class ArenaGenerator {
             int x = candidate[0];
             int z = candidate[1];
             int template = random.nextInt(2);
-            int[][] pair = {{-x, -z}, {x, z}};
+            int[][] pair = candidate[2] == 0
+                    ? new int[][]{{-x, -z}, {x, z}}
+                    : new int[][]{{-x, z}, {x, -z}};
             if (!isGenericRegionSafe(arena, pair[0][0], pair[0][1], relic, teamCount)
                     || !isGenericRegionSafe(arena, pair[1][0], pair[1][1], relic, teamCount)) {
                 continue;
@@ -545,7 +547,7 @@ final class ArenaGenerator {
                 // is validated after every mirrored pair is planned.
                 if (!relic && (navigation.isNearMainPath(x, z, 4)
                         || navigation.isNearMainPath(-x, -z, 4))) continue;
-                candidates.add(new int[]{x, z});
+                candidates.add(new int[]{x, z, random.nextBoolean() ? 1 : 0});
             }
         }
 
