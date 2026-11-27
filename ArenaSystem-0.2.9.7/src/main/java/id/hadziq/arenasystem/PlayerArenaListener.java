@@ -461,7 +461,7 @@ final class PlayerArenaListener implements Listener {
                         online.teleport(this.plugin.spawnLocation(arena, team));
                         online.setGameMode(GameMode.SURVIVAL);
                         online.setFallDistance(0.0F);
-                        online.setVelocity(new Vector<>(0, 0, 0));
+                        online.setVelocity(new Vector(0, 0, 0));
                         if (active.mode.equals("tdm")) {
                             this.plugin
                                 .giveClassLoadout(online, active.selectedClasses.getOrDefault(victimId, "knight"));
@@ -478,7 +478,7 @@ final class PlayerArenaListener implements Listener {
     private Location initialDeathCameraLocation(Location target) {
         Vector forward = target.getDirection().setY(0.0);
         if (forward.lengthSquared() < 1.0E-6) {
-            forward = new Vector<>(0.0, 0.0, 1.0);
+            forward = new Vector(0.0, 0.0, 1.0);
         }
 
         forward.normalize();

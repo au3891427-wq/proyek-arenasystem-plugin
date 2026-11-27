@@ -3274,7 +3274,7 @@ public final class ArenaSystemPlugin extends JavaPlugin implements Listener {
 
     Location faceArenaCenter(Location location, ArenaData arena) {
         if (location != null && arena != null) {
-            Vector towardCenter = new Vector<>(
+            Vector towardCenter = new Vector(
                 arena.centerX + 0.5 - location.getX(), 0.0, arena.centerZ + 0.5 - location.getZ()
             );
             if (towardCenter.lengthSquared() > 1.0E-6) {
@@ -3293,7 +3293,7 @@ public final class ArenaSystemPlugin extends JavaPlugin implements Listener {
             if (station.getWorld() == null) {
                 this.getLogger().warning("World lobby tidak ditemukan untuk arena " + arena.name + ".");
             } else {
-                player.setVelocity(new Vector<>(0.0, 0.0, 0.0));
+                player.setVelocity(new Vector(0.0, 0.0, 0.0));
                 player.setFallDistance(0.0F);
                 boolean moved = player.teleport(station);
                 if (!moved) {
@@ -3327,7 +3327,7 @@ public final class ArenaSystemPlugin extends JavaPlugin implements Listener {
                                         || current.distanceSquared(station) > 1.0
                                         || facingMismatch) {
                                         player.teleport(station);
-                                        player.setVelocity(new Vector<>(0.0, 0.0, 0.0));
+                                        player.setVelocity(new Vector(0.0, 0.0, 0.0));
                                         player.setFallDistance(0.0F);
                                     }
                                 }
@@ -5205,7 +5205,6 @@ public final class ArenaSystemPlugin extends JavaPlugin implements Listener {
                         row++;
                         rowNames.setLength(0);
                         prefix = "↳ ";
-                        int var19 = false;
                     }
 
                     if (!rowNames.isEmpty()) {
