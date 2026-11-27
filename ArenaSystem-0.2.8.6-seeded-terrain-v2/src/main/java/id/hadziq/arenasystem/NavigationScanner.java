@@ -52,6 +52,67 @@ final class NavigationScanner {
         return false;
     }
 
+    /**
+     * Ensures both Relic Rush teams retain a walkable route between their own
+     * sanctum and the central altar after a candidate structure pair is queued.
+     * Doors are treated as traversable; ordinary solid blocks are not.
+     */
+    static boolean hasRelicRoutes(TerrainProfile terrain, Map<BlockPos, BlockEdit> edits,
+                                  int spawnOffset) {
+        return connected(terrain, edits, -spawnOffset, 0, 0, 0)
+                && connected(terrain, edits, spawnOffset, 0, 0, 0);
+    }
+
+    private static boolean connected(TerrainProfile terrain, Map<BlockPos, BlockEdit> edits,
+                                     int startX, int startZ, int goalX, int goalZ) {
+        int radius = terrain.radius();
+        boolean[][] visited = new boolean[radius * 2 + 1][radius * 2 + 1];
+        int capacity = (radius * 2 + 1) * (radius * 2 + 1);
+        int[] queueX = new int[capacity];
+        int[] queueZ = new int[capacity];
+        int head = 0;
+        int tail = 0;
+        if (!walkable(terrain, edits, startX, startZ)
+                || !walkable(terrain, edits, goalX, goalZ)) return false;
+        queueX[tail] = startX;
+        queueZ[tail++] = startZ;
+        visited[startX + radius][startZ + radius] = true;
+        int[] dx = {1, -1, 0, 0};
+        int[] dz = {0, 0, 1, -1};
+
+        while (head < tail) {
+            int x = queueX[head];
+            int z = queueZ[head++];
+            if (x == goalX && z == goalZ) return true;
+            for (int i = 0; i < 4; i++) {
+                int nx = x + dx[i];
+                int nz = z + dz[i];
+                if (Math.abs(nx) > radius || Math.abs(nz) > radius
+                        || visited[nx + radius][nz + radius]) continue;
+                if (Math.abs(terrain.heightAt(nx, nz) - terrain.heightAt(x, z)) > 1
+                        || !walkable(terrain, edits, nx, nz)) continue;
+                visited[nx + radius][nz + radius] = true;
+                queueX[tail] = nx;
+                queueZ[tail++] = nz;
+            }
+        }
+        return false;
+    }
+
+    private static boolean walkable(TerrainProfile terrain, Map<BlockPos, BlockEdit> edits,
+                                    int x, int z) {
+        int surfaceY = terrain.heightAt(x, z);
+        BlockEdit surface = edits.get(new BlockPos(x, surfaceY, z));
+        if (surface != null && !surface.material.isSolid()) return false;
+        for (int dy = 1; dy <= 2; dy++) {
+            BlockEdit above = edits.get(new BlockPos(x, surfaceY + dy, z));
+            if (above == null || above.material.isAir() || above.material.isPassable()
+                    || above.material.name().endsWith("_DOOR")) continue;
+            return false;
+        }
+        return true;
+    }
+
     private boolean inside(int x, int z) {
         return Math.abs(x) <= radius && Math.abs(z) <= radius;
     }
