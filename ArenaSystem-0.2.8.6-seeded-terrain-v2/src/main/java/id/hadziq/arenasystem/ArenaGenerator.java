@@ -487,7 +487,6 @@ final class ArenaGenerator {
                                                int teamCount) {
         boolean relic = "relic_rush".equalsIgnoreCase(arena.mode);
         Random random = new Random(seed ^ 0x47454E5354525543L);
-        int houseTemplate = random.nextBoolean() ? 0 : 1;
         Material wall = switch (random.nextInt(3)) {
             case 0 -> Material.STONE_BRICKS;
             case 1 -> Material.MOSSY_STONE_BRICKS;
@@ -501,21 +500,22 @@ final class ArenaGenerator {
             if (placedPairs >= targetPairs) break;
             int x = candidate[0];
             int z = candidate[1];
+            int template = random.nextInt(2);
             int[][] pair = {{-x, -z}, {x, z}};
             if (!isGenericRegionSafe(arena, pair[0][0], pair[0][1], relic, teamCount)
                     || !isGenericRegionSafe(arena, pair[1][0], pair[1][1], relic, teamCount)) {
                 continue;
             }
-            if (!isGenericSiteClear(world, arena, terrain, edits, pair[0][0], pair[0][1], houseTemplate)
-                    || !isGenericSiteClear(world, arena, terrain, edits, pair[1][0], pair[1][1], houseTemplate)) {
+            if (!isGenericSiteClear(world, arena, terrain, edits, pair[0][0], pair[0][1], template)
+                    || !isGenericSiteClear(world, arena, terrain, edits, pair[1][0], pair[1][1], template)) {
                 continue;
             }
 
             Map<BlockPos, BlockEdit> beforePair = relic ? new LinkedHashMap<>(edits) : null;
             buildGenericStructure(world, arena, terrain, edits,
-                    pair[0][0], pair[0][1], houseTemplate, wall);
+                    pair[0][0], pair[0][1], template, wall);
             buildGenericStructure(world, arena, terrain, edits,
-                    pair[1][0], pair[1][1], houseTemplate, wall);
+                    pair[1][0], pair[1][1], template, wall);
 
             // Relic Rush may use the main lane as a deliberate chokepoint, but
             // never at the cost of disconnecting either team's altar route.
@@ -605,7 +605,7 @@ final class ArenaGenerator {
                 }
             }
         }
-        return maxY - minY <= 4;
+        // A near-level footprint keeps the floor, threshold and two-block door aligned.\n        return maxY - minY <= 1;
     }
 
     /** Wooden village house: usable two-block door, glass windows, furnished interior and pitched roof. */
