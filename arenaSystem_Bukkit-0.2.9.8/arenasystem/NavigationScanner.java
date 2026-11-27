@@ -3,6 +3,7 @@ package id.hadziq.arenasystem;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 
 // $VF: Compiled from NavigationScanner.java
@@ -70,14 +71,29 @@ final class NavigationScanner {
             return false;
         }
 
+        int radius = terrain.radius();
         for (String team : RelicTeamLayout.teamNames(teamCount)) {
             int[] spawn = RelicTeamLayout.offset(team, teamCount, spawnOffset);
             double spawnLength = Math.hypot(spawn[0], spawn[1]);
             int startX = (int)Math.round(spawn[0] - spawn[0] / spawnLength * 7.0);
             int startZ = (int)Math.round(spawn[1] - spawn[1] / spawnLength * 7.0);
-            if (countVertexDisjointPaths(
+            boolean startInBounds = Math.abs(startX) <= radius && Math.abs(startZ) <= radius;
+            boolean startWalkable = startInBounds && walkable(arena, terrain, edits, startX, startZ);
+            boolean goalWalkable = walkable(arena, terrain, edits, altarAccess[0], altarAccess[1]);
+            int flow = countVertexDisjointPaths(
                 arena, terrain, edits, startX, startZ, altarAccess[0], altarAccess[1]
-            ) < 2) {
+            );
+            Bukkit.getLogger().info(
+                "[ArenaSystem][DEBUG] Relic Rush team=" + team
+                    + " spawn=(" + spawn[0] + "," + spawn[1] + ")"
+                    + " start=(" + startX + "," + startZ + ")"
+                    + " startInBounds=" + startInBounds
+                    + " startWalkable=" + startWalkable
+                    + " altar=(" + altarAccess[0] + "," + altarAccess[1] + ")"
+                    + " altarWalkable=" + goalWalkable
+                    + " flow=" + flow
+            );
+            if (flow < 2) {
                 return false;
             }
         }
