@@ -28,8 +28,8 @@ jobs:
 
       - name: Build with Maven
         run: |
-          POM_PATH=$(find . -maxdepth 3 -name "pom.xml" | head -n 1)
-          echo "Found POM at: $POM_PATH"
+          POM_PATH="ArenaSystem-0.2.9.7/pom.xml"
+          echo "Building: $POM_PATH"
           mvn -f "$POM_PATH" -B -q package
 
       - name: Upload JAR Artifact
