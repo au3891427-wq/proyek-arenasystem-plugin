@@ -32,7 +32,8 @@ final class NavigationScanner {
             int x = edit.position.x;
             int z = edit.position.z;
             if (Math.abs(x) > radius || Math.abs(z) > radius) continue;
-            if (PATH_MATERIALS.contains(edit.material)) {
+            if (edit.position.y == terrain.heightAt(x, z) - arena.centerY
+                    && PATH_MATERIALS.contains(edit.material)) {
                 path[x + radius][z + radius] = true;
             }
         }
