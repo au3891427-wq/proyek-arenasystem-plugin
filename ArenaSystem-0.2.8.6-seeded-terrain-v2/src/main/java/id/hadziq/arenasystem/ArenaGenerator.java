@@ -493,10 +493,12 @@ final class ArenaGenerator {
             case 1 -> Material.MOSSY_STONE_BRICKS;
             default -> Material.COBBLESTONE;
         };
+        NavigationScanner navigation = NavigationScanner.scan(arena, terrain, edits);
+        int targetPairs = relic ? 4 : 3;
+        int placedPairs = 0;
 
-        // Candidate coordinates stay in the playable midfield, away from mode lanes.
-        // The order is seed-stable, but every placement is an opposite mirrored pair.
-        for (int[] candidate : genericStructureCandidates(radius, relic, random)) {
+        for (int[] candidate : genericStructureCandidates(radius, relic, random, navigation)) {
+            if (placedPairs >= targetPairs) break;
             int x = candidate[0];
             int z = candidate[1];
             int[][] pair = {{-x, -z}, {x, z}};
@@ -509,36 +511,39 @@ final class ArenaGenerator {
                 continue;
             }
 
+            Map<BlockPos, BlockEdit> beforePair = relic ? new LinkedHashMap<>(edits) : null;
             buildGenericStructure(world, arena, terrain, edits,
                     pair[0][0], pair[0][1], houseTemplate, wall);
             buildGenericStructure(world, arena, terrain, edits,
                     pair[1][0], pair[1][1], houseTemplate, wall);
-            return;
+
+            // Relic Rush may use the main lane as a deliberate chokepoint, but
+            // never at the cost of disconnecting either team's altar route.
+            if (relic && !NavigationScanner.hasRelicRoutes(arena, terrain, edits, arena.spawnOffset)) {
+                edits.clear();
+                edits.putAll(beforePair);
+                continue;
+            }
+            placedPairs++;
         }
     }
 
-    private static List<int[]> genericStructureCandidates(int radius, boolean relic, Random random) {
+    private static List<int[]> genericStructureCandidates(int radius, boolean relic, Random random,
+                                                          NavigationScanner navigation) {
         List<int[]> candidates = new ArrayList<>();
-        if (relic) {
-            // Relic Rush has side lanes at roughly |z|=25 and cross-lanes at
-            // |x|=22/41 (for the standard radius 56). Use the inner diagonal
-            // pocket between the central and outer lanes, not the arena corners.
-            int minX = Math.max(30, (int) Math.ceil(radius * 0.60D));
-            int maxX = Math.min(radius - 15, (int) Math.floor(radius * 0.70D));
-            for (int x = minX; x <= maxX; x++) {
-                for (int z = 10; z <= 19; z++) candidates.add(new int[]{x, z});
-            }
-        } else {
-            // TDM midfield pocket, just outside the seeded cover/ruin cluster
-            // and diagonally offset from the four spawn pads.
-            int min = Math.max(25, (int) Math.ceil(radius * 0.62D));
-            int max = Math.min(radius - 7, (int) Math.floor(radius * 0.80D));
-            for (int x = min; x <= max; x++) {
-                for (int z = min; z <= max; z++) candidates.add(new int[]{x, z});
+        int min = 10;
+        int max = Math.max(min, radius - 10);
+        for (int x = min; x <= max; x++) {
+            for (int z = min; z <= max; z++) {
+                // TDM keeps its detected main and cross lanes clear. Relic Rush
+                // deliberately permits structures on its main lane; connectivity
+                // is validated after every mirrored pair is planned.
+                if (!relic && (navigation.isNearMainPath(x, z, 4)
+                        || navigation.isNearMainPath(-x, -z, 4))) continue;
+                candidates.add(new int[]{x, z});
             }
         }
 
-        // Shuffle only within the intended pocket; do not drift toward arena corners.
         for (int i = candidates.size() - 1; i > 0; i--) {
             int j = random.nextInt(i + 1);
             int[] value = candidates.get(i);
@@ -564,15 +569,8 @@ final class ArenaGenerator {
         int absX = Math.abs(x);
         int absZ = Math.abs(z);
         if (absX <= 8 || absZ <= 8) return false;
-        if (relic) {
-            int scaleSideLane = (int) Math.round(18.0D * arena.radius / 40.0D);
-            int crossLaneInner = (int) Math.round(16.0D * arena.radius / 40.0D);
-            int crossLaneOuter = (int) Math.round(29.0D * arena.radius / 40.0D);
-            if (Math.abs(absX - scaleSideLane) <= 5 || Math.abs(absZ - scaleSideLane) <= 5) return false;
-            // Keep the entire 7x7 footprint clear of the two cross-lanes.
-            if (Math.abs(absX - crossLaneInner) <= 4
-                    || Math.abs(absX - crossLaneOuter) <= 4) return false;
-        }
+        // Relic Rush intentionally allows buildings to occupy primary lanes.
+        // Post-placement navigation validation preserves routes to the altar.
         for (int[] spawn : SeededTerrainBlender.anchors(arena.spawnOffset, teamCount)) {
             int dx = Math.max(0, Math.abs(x - spawn[0]) - 7);
             int dz = Math.max(0, Math.abs(z - spawn[1]) - 7);
