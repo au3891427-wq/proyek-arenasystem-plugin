@@ -48,55 +48,53 @@ final class RelicListener implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onPlayerMove(PlayerMoveEvent event) {
-        if (event.getTo() != null) {
-            if (!(event.getFrom().distanceSquared(event.getTo()) < 1.0E-4)) {
-                Player player = event.getPlayer();
-                if (player.getGameMode() == GameMode.SURVIVAL) {
-                    ArenaData arena = this.plugin.findArena(event.getTo());
-                    if (arena != null) {
-                        MatchState state = this.plugin.matches.get(arena.name);
-                        if (state != null && state.running && state.mode.equals("relic_rush")) {
-                            String team = state.teams.get(player.getUniqueId());
-                            if (team != null) {
-                                if (state.relicCarrier != null && state.relicCarrier.equals(player.getUniqueId())) {
-                                    Location ownSanctum = this.plugin.spawnLocation(arena, team);
-                                    if (event.getTo().distanceSquared(ownSanctum) <= 6.25) {
-                                        this.deliverRelic(player, arena, state, team);
-                                    }
-                                } else if (state.relicCarrier == null) {
-                                    for (Entity nearby : event.getTo()
-                                        .getWorld()
-                                        .getNearbyEntities(event.getTo(), 2.5, 2.5, 2.5)) {
-                                        if (nearby instanceof Item item && item.isValid()) {
-                                            ItemStack stack = item.getItemStack();
-                                            if (this.plugin.isRelic(stack, state)
-                                                && !(item.getLocation().distanceSquared(event.getTo()) > 6.25)) {
-                                                if (player.getInventory().firstEmpty() == -1) {
-                                                    player.sendMessage(
-                                                        ChatColor.YELLOW
-                                                            + "Inventorimu penuh; kosongkan satu slot untuk mengambil Relic."
-                                                    );
-                                                    return;
-                                                }
-
-                                                item.remove();
-                                                player.getInventory().addItem(stack.clone());
-                                                state.relicCarrier = player.getUniqueId();
-                                                state.relicDropped = false;
-                                                this.plugin.applyRelicCarrierMovement(player, state);
-                                                String teamName = team.toUpperCase(Locale.ROOT);
-                                                this.plugin
-                                                    .announce(
-                                                        state,
-                                                        ChatColor.GOLD
-                                                            + player.getName()
-                                                            + " dari tim "
-                                                            + teamName
-                                                            + " membawa Relic! Antar ke sanctum markas timnya."
-                                                    );
-                                                this.plugin.updateMatchHud(state);
+        if (event.getTo() != null && !(event.getFrom().distanceSquared(event.getTo()) < 1.0E-4)) {
+            Player player = event.getPlayer();
+            if (player.getGameMode() == GameMode.SURVIVAL) {
+                ArenaData arena = this.plugin.findArena(event.getTo());
+                if (arena != null) {
+                    MatchState state = this.plugin.matches.get(arena.name);
+                    if (state != null && state.running && state.mode.equals("relic_rush")) {
+                        String team = state.teams.get(player.getUniqueId());
+                        if (team != null) {
+                            if (state.relicCarrier != null && state.relicCarrier.equals(player.getUniqueId())) {
+                                Location ownSanctum = this.plugin.spawnLocation(arena, team);
+                                if (event.getTo().distanceSquared(ownSanctum) <= 6.25) {
+                                    this.deliverRelic(player, arena, state, team);
+                                }
+                            } else if (state.relicCarrier == null) {
+                                for (Entity nearby : event.getTo()
+                                    .getWorld()
+                                    .getNearbyEntities(event.getTo(), 2.5, 2.5, 2.5)) {
+                                    if (nearby instanceof Item item && item.isValid()) {
+                                        ItemStack stack = item.getItemStack();
+                                        if (this.plugin.isRelic(stack, state)
+                                            && !(item.getLocation().distanceSquared(event.getTo()) > 6.25)) {
+                                            if (player.getInventory().firstEmpty() == -1) {
+                                                player.sendMessage(
+                                                    ChatColor.YELLOW
+                                                        + "Inventorimu penuh; kosongkan satu slot untuk mengambil Relic."
+                                                );
                                                 return;
                                             }
+
+                                            item.remove();
+                                            player.getInventory().addItem(stack.clone());
+                                            state.relicCarrier = player.getUniqueId();
+                                            state.relicDropped = false;
+                                            this.plugin.applyRelicCarrierMovement(player, state);
+                                            String teamName = team.toUpperCase(Locale.ROOT);
+                                            this.plugin
+                                                .announce(
+                                                    state,
+                                                    ChatColor.GOLD
+                                                        + player.getName()
+                                                        + " dari tim "
+                                                        + teamName
+                                                        + " membawa Relic! Antar ke sanctum markas timnya."
+                                                );
+                                            this.plugin.updateMatchHud(state);
+                                            return;
                                         }
                                     }
                                 }
@@ -210,16 +208,15 @@ final class RelicListener implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onPreparationClassSelector(PlayerInteractEvent event) {
-        if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
-            if (event.getHand() != null) {
-                Player player = event.getPlayer();
-                MatchState preparingState = this.plugin.findPreparingMatch(player.getUniqueId());
-                if (preparingState != null && this.plugin.isClassSelector(event.getItem())) {
-                    event.setCancelled(true);
-                    ArenaData preparingArena = this.plugin.arenas.get(preparingState.arenaName);
-                    if (preparingArena != null) {
-                        this.plugin.openClassMenu(player, preparingArena, preparingState);
-                    }
+        if ((event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)
+            && event.getHand() != null) {
+            Player player = event.getPlayer();
+            MatchState preparingState = this.plugin.findPreparingMatch(player.getUniqueId());
+            if (preparingState != null && this.plugin.isClassSelector(event.getItem())) {
+                event.setCancelled(true);
+                ArenaData preparingArena = this.plugin.arenas.get(preparingState.arenaName);
+                if (preparingArena != null) {
+                    this.plugin.openClassMenu(player, preparingArena, preparingState);
                 }
             }
         }

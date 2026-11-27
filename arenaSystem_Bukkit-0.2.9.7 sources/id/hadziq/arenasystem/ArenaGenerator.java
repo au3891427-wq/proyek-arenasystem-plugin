@@ -31,12 +31,19 @@ final class ArenaGenerator {
         normalizeSurface(world, arena, originalTerrain, terrain, edits, radius);
         queueCombatVegetationCleanup(world, arena, terrain, edits, radius);
         if ("relic_rush".equalsIgnoreCase(arena.mode)) {
-            buildRelicRush(world, arena, terrain, edits, seed, radius);
+            buildRelicRush(world, arena, terrain, edits, seed, radius, teamCount);
         } else {
             buildTeamDeathmatch(world, arena, terrain, edits, seed, radius, teamCount);
         }
 
         buildGenericStructures(world, arena, terrain, edits, seed, radius, teamCount);
+        if ("relic_rush".equalsIgnoreCase(arena.mode)
+            && !NavigationScanner.hasRelicRoutes(arena, terrain, edits, arena.spawnOffset, teamCount)) {
+            throw new IllegalStateException(
+                "Relic Rush ditolak: minimal dua rute terpisah dari setiap markas menuju altar tidak tersedia."
+            );
+        }
+
         buildPerimeter(world, arena, terrain, edits, radius);
         return new ArrayList<>(edits.values());
     }
@@ -185,163 +192,284 @@ final class ArenaGenerator {
     }
 
     private static void buildRelicRush(
-        World world, ArenaData arena, TerrainProfile terrain, Map<BlockPos, BlockEdit> edits, long seed, int radius
+        World world,
+        ArenaData arena,
+        TerrainProfile terrain,
+        Map<BlockPos, BlockEdit> edits,
+        long seed,
+        int radius,
+        int teamCount
     ) {
         double scale = radius / 40.0;
         int laneEnd = radius - 14;
         int sideLaneOffset = (int)Math.round(18.0 * scale);
         int crossLaneOuter = (int)Math.round(29.0 * scale);
         int crossLaneInner = (int)Math.round(16.0 * scale);
-        int sanctumOffset = radius - 8;
         int laneHalfWidth = Math.max(2, (int)Math.round(2.0 * scale));
-
-        for (int x = -laneEnd; x <= laneEnd; x++) {
-            for (int z = -laneHalfWidth; z <= laneHalfWidth; z++) {
-                addSurface(
-                    world,
-                    arena,
-                    terrain,
-                    edits,
-                    x,
-                    z,
-                    Math.abs(z) == laneHalfWidth ? Material.CUT_SANDSTONE : Material.SMOOTH_SANDSTONE
-                );
-            }
-
-            for (int side : new int[]{-sideLaneOffset, sideLaneOffset}) {
-                for (int dz = -laneHalfWidth; dz <= laneHalfWidth; dz++) {
+        if (teamCount <= 2) {
+            for (int x = -laneEnd; x <= laneEnd; x++) {
+                for (int z = -laneHalfWidth; z <= laneHalfWidth; z++) {
                     addSurface(
                         world,
                         arena,
                         terrain,
                         edits,
                         x,
-                        side + dz,
-                        Math.abs(dz) == laneHalfWidth ? Material.SANDSTONE : Material.CUT_SANDSTONE
+                        z,
+                        Math.abs(z) == laneHalfWidth ? Material.CUT_SANDSTONE : Material.SMOOTH_SANDSTONE
                     );
                 }
+
+                for (int side : new int[]{-sideLaneOffset, sideLaneOffset}) {
+                    for (int dz = -laneHalfWidth; dz <= laneHalfWidth; dz++) {
+                        addSurface(
+                            world,
+                            arena,
+                            terrain,
+                            edits,
+                            x,
+                            side + dz,
+                            Math.abs(dz) == laneHalfWidth ? Material.SANDSTONE : Material.CUT_SANDSTONE
+                        );
+                    }
+                }
             }
+
+            int[] crossLanes = new int[]{-crossLaneOuter, -crossLaneInner, 0, crossLaneInner, crossLaneOuter};
+
+            for (int x : crossLanes) {
+                for (int z = -sideLaneOffset; z <= sideLaneOffset; z++) {
+                    for (int dx = -1; dx <= 1; dx++) {
+                        addSurface(
+                            world,
+                            arena,
+                            terrain,
+                            edits,
+                            x + dx,
+                            z,
+                            Math.abs(dx) == 1 ? Material.CUT_SANDSTONE : Material.SMOOTH_SANDSTONE
+                        );
+                    }
+                }
+            }
+        } else {
+            buildRelicTeamRoutes(world, arena, terrain, edits, teamCount);
         }
 
-        int[] crossLanes = new int[]{-crossLaneOuter, -crossLaneInner, 0, crossLaneInner, crossLaneOuter};
+        for (String team : RelicTeamLayout.teamNames(teamCount)) {
+            int[] spawn = RelicTeamLayout.offset(team, teamCount, arena.spawnOffset);
+            buildRelicSanctum(
+                world,
+                arena,
+                terrain,
+                edits,
+                spawn[0],
+                spawn[1],
+                relicTeamMaterial(team),
+                -Integer.signum(spawn[0]),
+                -Integer.signum(spawn[1])
+            );
+        }
 
-        for (int x : crossLanes) {
-            for (int z = -sideLaneOffset; z <= sideLaneOffset; z++) {
-                for (int dx = -1; dx <= 1; dx++) {
+        buildRelicShrine(world, arena, terrain, edits);
+        Random outpostLayout = SeededArenaLayout.relicOutpostRandom(seed);
+        if (teamCount <= 2) {
+            int nearX = (int)Math.round(19.0 * scale);
+            int nearZ = (int)Math.round(9.0 * scale);
+            int farX = (int)Math.round(9.0 * scale);
+            int farZ = (int)Math.round(28.0 * scale);
+            buildRelicOutpostPair(
+                world, arena, terrain, edits, nearX, -nearZ, Material.MOSSY_STONE_BRICKS, outpostLayout.nextBoolean()
+            );
+            buildRelicOutpostPair(
+                world, arena, terrain, edits, nearX, nearZ, Material.MOSSY_STONE_BRICKS, outpostLayout.nextBoolean()
+            );
+            buildRelicOutpostPair(
+                world, arena, terrain, edits, farX, -farZ, Material.CHISELED_SANDSTONE, outpostLayout.nextBoolean()
+            );
+            buildRelicOutpostPair(
+                world, arena, terrain, edits, farX, farZ, Material.CHISELED_SANDSTONE, outpostLayout.nextBoolean()
+            );
+            int ringInnerX = (int)Math.round(24.0 * scale);
+            int ringInnerZ = (int)Math.round(28.0 * scale);
+            int ringOuterX = (int)Math.round(36.0 * scale);
+            int ringOuterZ = (int)Math.round(18.0 * scale);
+            int ringOuter = (int)Math.round(25.0 * scale);
+            buildRelicOutpostPair(
+                world,
+                arena,
+                terrain,
+                edits,
+                ringInnerX,
+                -ringInnerZ,
+                Material.MOSSY_STONE_BRICKS,
+                outpostLayout.nextBoolean()
+            );
+            buildRelicOutpostPair(
+                world,
+                arena,
+                terrain,
+                edits,
+                ringInnerX,
+                ringInnerZ,
+                Material.MOSSY_STONE_BRICKS,
+                outpostLayout.nextBoolean()
+            );
+            buildRelicOutpostPair(
+                world,
+                arena,
+                terrain,
+                edits,
+                ringOuterX,
+                -ringOuterZ,
+                Material.CHISELED_SANDSTONE,
+                outpostLayout.nextBoolean()
+            );
+            buildRelicOutpostPair(
+                world,
+                arena,
+                terrain,
+                edits,
+                ringOuterX,
+                ringOuterZ,
+                Material.CHISELED_SANDSTONE,
+                outpostLayout.nextBoolean()
+            );
+            int[] coverXs = new int[]{
+                (int)Math.round(-27.0 * scale),
+                (int)Math.round(-13.0 * scale),
+                (int)Math.round(13.0 * scale),
+                (int)Math.round(27.0 * scale)
+            };
+
+            for (int x : coverXs) {
+                buildLowCover(world, arena, terrain, edits, x, 0, Material.COBBLESTONE);
+                buildLowCover(world, arena, terrain, edits, x, -sideLaneOffset, Material.MOSSY_STONE_BRICKS);
+                buildLowCover(world, arena, terrain, edits, x, sideLaneOffset, Material.MOSSY_STONE_BRICKS);
+            }
+
+            for (int x : new int[]{-crossLaneOuter, crossLaneOuter}) {
+                for (int z : new int[]{-ringOuterZ, ringOuterZ, -ringOuter, ringOuter}) {
+                    buildLowCover(world, arena, terrain, edits, x, z, Material.COBBLESTONE);
+                }
+            }
+
+            buildRuin(world, arena, terrain, edits, -crossLaneOuter, -sideLaneOffset + 2, Material.CUT_SANDSTONE);
+            buildRuin(world, arena, terrain, edits, -crossLaneOuter, sideLaneOffset - 2, Material.CUT_SANDSTONE);
+            buildRuin(world, arena, terrain, edits, crossLaneOuter, -sideLaneOffset + 2, Material.CUT_SANDSTONE);
+            buildRuin(world, arena, terrain, edits, crossLaneOuter, sideLaneOffset - 2, Material.CUT_SANDSTONE);
+            Material[] palette = new Material[]{
+                Material.MOSSY_STONE_BRICKS, Material.CHISELED_SANDSTONE, Material.CUT_SANDSTONE, Material.STONE_BRICKS
+            };
+
+            for (SeededArenaLayout.CoverSite site : SeededArenaLayout.relicRush(seed)) {
+                Material material = palette[site.paletteIndex()];
+
+                for (int signX : new int[]{-1, 1}) {
+                    for (int signZ : new int[]{-1, 1}) {
+                        buildLowCover(
+                            world, arena, terrain, edits, signX * site.x(), signZ * site.z(), material, site.alongX()
+                        );
+                    }
+                }
+            }
+        } else {
+            buildRelicComplexRings(world, arena, terrain, edits, outpostLayout, teamCount);
+        }
+    }
+
+    private static Material relicTeamMaterial(String team) {
+        return switch (team) {
+            case "red" -> Material.RED_TERRACOTTA;
+            case "blue" -> Material.BLUE_TERRACOTTA;
+            case "green" -> Material.GREEN_TERRACOTTA;
+            case "yellow" -> Material.YELLOW_TERRACOTTA;
+            default -> Material.WHITE_TERRACOTTA;
+        };
+    }
+
+    private static void buildRelicTeamRoutes(
+        World world, ArenaData arena, TerrainProfile terrain, Map<BlockPos, BlockEdit> edits, int teamCount
+    ) {
+        for (String team : RelicTeamLayout.teamNames(teamCount)) {
+            int[] spawn = RelicTeamLayout.offset(team, teamCount, arena.spawnOffset);
+            double length = Math.hypot(spawn[0], spawn[1]);
+            double inwardX = -spawn[0] / length;
+            double inwardZ = -spawn[1] / length;
+            double sideX = -inwardZ;
+            double sideZ = inwardX;
+            int startX = (int)Math.round(spawn[0] + inwardX * 7.0);
+            int startZ = (int)Math.round(spawn[1] + inwardZ * 7.0);
+            paintRelicLane(world, arena, terrain, edits, startX, startZ, 0, 0);
+
+            for (int side : new int[]{-1, 1}) {
+                int sideStartX = (int)Math.round(startX + sideX * side * 7.0);
+                int sideStartZ = (int)Math.round(startZ + sideZ * side * 7.0);
+                int sideEndX = (int)Math.round(sideX * side * 7.0);
+                int sideEndZ = (int)Math.round(sideZ * side * 7.0);
+                paintRelicLane(world, arena, terrain, edits, startX, startZ, sideStartX, sideStartZ);
+                paintRelicLane(world, arena, terrain, edits, sideStartX, sideStartZ, sideEndX, sideEndZ);
+                paintRelicLane(world, arena, terrain, edits, sideEndX, sideEndZ, 0, 0);
+            }
+        }
+    }
+
+    private static void paintRelicLane(
+        World world,
+        ArenaData arena,
+        TerrainProfile terrain,
+        Map<BlockPos, BlockEdit> edits,
+        int startX,
+        int startZ,
+        int endX,
+        int endZ
+    ) {
+        int steps = Math.max(Math.abs(endX - startX), Math.abs(endZ - startZ));
+        steps = Math.max(1, steps);
+
+        for (int step = 0; step <= steps; step++) {
+            int x = (int)Math.round(startX + (endX - startX) * ((double)step / steps));
+            int z = (int)Math.round(startZ + (endZ - startZ) * ((double)step / steps));
+
+            for (int dx = -2; dx <= 2; dx++) {
+                for (int dz = -2; dz <= 2; dz++) {
+                    int edge = Math.max(Math.abs(dx), Math.abs(dz));
                     addSurface(
                         world,
                         arena,
                         terrain,
                         edits,
                         x + dx,
-                        z,
-                        Math.abs(dx) == 1 ? Material.CUT_SANDSTONE : Material.SMOOTH_SANDSTONE
+                        z + dz,
+                        edge == 2 ? Material.CUT_SANDSTONE : Material.SMOOTH_SANDSTONE
                     );
                 }
             }
         }
+    }
 
-        buildRelicSanctum(world, arena, terrain, edits, -sanctumOffset, Material.RED_TERRACOTTA, true);
-        buildRelicSanctum(world, arena, terrain, edits, sanctumOffset, Material.BLUE_TERRACOTTA, false);
-        buildRelicShrine(world, arena, terrain, edits);
-        int nearX = (int)Math.round(19.0 * scale);
-        int nearZ = (int)Math.round(9.0 * scale);
-        int farX = (int)Math.round(9.0 * scale);
-        int farZ = (int)Math.round(28.0 * scale);
-        Random outpostLayout = SeededArenaLayout.relicOutpostRandom(seed);
-        buildRelicOutpostPair(
-            world, arena, terrain, edits, nearX, -nearZ, Material.MOSSY_STONE_BRICKS, outpostLayout.nextBoolean()
-        );
-        buildRelicOutpostPair(
-            world, arena, terrain, edits, nearX, nearZ, Material.MOSSY_STONE_BRICKS, outpostLayout.nextBoolean()
-        );
-        buildRelicOutpostPair(
-            world, arena, terrain, edits, farX, -farZ, Material.CHISELED_SANDSTONE, outpostLayout.nextBoolean()
-        );
-        buildRelicOutpostPair(
-            world, arena, terrain, edits, farX, farZ, Material.CHISELED_SANDSTONE, outpostLayout.nextBoolean()
-        );
-        int ringInnerX = (int)Math.round(24.0 * scale);
-        int ringInnerZ = (int)Math.round(28.0 * scale);
-        int ringOuterX = (int)Math.round(36.0 * scale);
-        int ringOuterZ = (int)Math.round(18.0 * scale);
-        int ringOuter = (int)Math.round(25.0 * scale);
-        buildRelicOutpostPair(
-            world,
-            arena,
-            terrain,
-            edits,
-            ringInnerX,
-            -ringInnerZ,
-            Material.MOSSY_STONE_BRICKS,
-            outpostLayout.nextBoolean()
-        );
-        buildRelicOutpostPair(
-            world,
-            arena,
-            terrain,
-            edits,
-            ringInnerX,
-            ringInnerZ,
-            Material.MOSSY_STONE_BRICKS,
-            outpostLayout.nextBoolean()
-        );
-        buildRelicOutpostPair(
-            world,
-            arena,
-            terrain,
-            edits,
-            ringOuterX,
-            -ringOuterZ,
-            Material.CHISELED_SANDSTONE,
-            outpostLayout.nextBoolean()
-        );
-        buildRelicOutpostPair(
-            world,
-            arena,
-            terrain,
-            edits,
-            ringOuterX,
-            ringOuterZ,
-            Material.CHISELED_SANDSTONE,
-            outpostLayout.nextBoolean()
-        );
-        int[] coverXs = new int[]{
-            (int)Math.round(-27.0 * scale),
-            (int)Math.round(-13.0 * scale),
-            (int)Math.round(13.0 * scale),
-            (int)Math.round(27.0 * scale)
-        };
+    private static void buildRelicComplexRings(
+        World world,
+        ArenaData arena,
+        TerrainProfile terrain,
+        Map<BlockPos, BlockEdit> edits,
+        Random random,
+        int teamCount
+    ) {
+        int count = teamCount == 3 ? 6 : 8;
 
-        for (int x : coverXs) {
-            buildLowCover(world, arena, terrain, edits, x, 0, Material.COBBLESTONE);
-            buildLowCover(world, arena, terrain, edits, x, -sideLaneOffset, Material.MOSSY_STONE_BRICKS);
-            buildLowCover(world, arena, terrain, edits, x, sideLaneOffset, Material.MOSSY_STONE_BRICKS);
-        }
+        for (int ring = 0; ring < 2; ring++) {
+            double radius = ring == 0 ? 21.0 : 35.0;
+            double rotation = ring == 0 ? 0.0 : Math.PI / count;
 
-        for (int x : new int[]{-crossLaneOuter, crossLaneOuter}) {
-            for (int z : new int[]{-ringOuterZ, ringOuterZ, -ringOuter, ringOuter}) {
-                buildLowCover(world, arena, terrain, edits, x, z, Material.COBBLESTONE);
-            }
-        }
-
-        buildRuin(world, arena, terrain, edits, -crossLaneOuter, -sideLaneOffset + 2, Material.CUT_SANDSTONE);
-        buildRuin(world, arena, terrain, edits, -crossLaneOuter, sideLaneOffset - 2, Material.CUT_SANDSTONE);
-        buildRuin(world, arena, terrain, edits, crossLaneOuter, -sideLaneOffset + 2, Material.CUT_SANDSTONE);
-        buildRuin(world, arena, terrain, edits, crossLaneOuter, sideLaneOffset - 2, Material.CUT_SANDSTONE);
-        Material[] seededCoverPalette = new Material[]{
-            Material.MOSSY_STONE_BRICKS, Material.CHISELED_SANDSTONE, Material.CUT_SANDSTONE, Material.STONE_BRICKS
-        };
-
-        for (SeededArenaLayout.CoverSite site : SeededArenaLayout.relicRush(seed)) {
-            Material material = seededCoverPalette[site.paletteIndex()];
-
-            for (int signX : new int[]{-1, 1}) {
-                for (int signZ : new int[]{-1, 1}) {
-                    buildLowCover(
-                        world, arena, terrain, edits, signX * site.x(), signZ * site.z(), material, site.alongX()
-                    );
-                }
+            for (int i = 0; i < count; i++) {
+                double angle = rotation + (Math.PI * 2) * i / count;
+                int x = (int)Math.round(Math.cos(angle) * radius);
+                int z = (int)Math.round(Math.sin(angle) * radius);
+                Material wall = (i + ring) % 2 == 0 ? Material.MOSSY_STONE_BRICKS : Material.CHISELED_SANDSTONE;
+                buildRelicOutpost(
+                    world, arena, terrain, edits, x, z, wall, Math.abs(Math.cos(angle)) >= Math.abs(Math.sin(angle))
+                );
             }
         }
     }
@@ -427,50 +555,86 @@ final class ArenaGenerator {
         TerrainProfile terrain,
         Map<BlockPos, BlockEdit> edits,
         int centerX,
+        int centerZ,
         Material teamMaterial,
-        boolean red
+        int inwardX,
+        int inwardZ
     ) {
         for (int dx = -6; dx <= 6; dx++) {
-            for (int z = -6; z <= 6; z++) {
-                int distance = Math.max(Math.abs(dx), Math.abs(z));
+            for (int dz = -6; dz <= 6; dz++) {
+                int distance = Math.max(Math.abs(dx), Math.abs(dz));
                 Material floor = distance == 6 ? Material.WHITE_CONCRETE : teamMaterial;
-                if (Math.abs(dx) <= 1 && Math.abs(z) <= 1) {
+                if (Math.abs(dx) <= 1 && Math.abs(dz) <= 1) {
                     floor = Material.SMOOTH_STONE;
                 }
 
-                if (distance == 5 && (dx == 0 || z == 0)) {
+                if (distance == 5 && (dx == 0 || dz == 0)) {
                     floor = Material.CHISELED_SANDSTONE;
                 }
 
-                addSurface(world, arena, terrain, edits, centerX + dx, z, floor);
+                addSurface(world, arena, terrain, edits, centerX + dx, centerZ + dz, floor);
             }
         }
 
         for (int dx : new int[]{-6, 6}) {
-            for (int z : new int[]{-6, 6}) {
+            for (int dz : new int[]{-6, 6}) {
                 buildTerrainPillar(
-                    world, arena, terrain, edits, centerX + dx, z, 4, teamMaterial, Material.SMOOTH_SANDSTONE
+                    world,
+                    arena,
+                    terrain,
+                    edits,
+                    centerX + dx,
+                    centerZ + dz,
+                    4,
+                    teamMaterial,
+                    Material.SMOOTH_SANDSTONE
                 );
             }
         }
 
-        int inward = red ? 1 : -1;
+        int perpendicularX = -inwardZ;
+        int perpendicularZ = inwardX;
+        int gateX = centerX + inwardX * 6;
+        int gateZ = centerZ + inwardZ * 6;
 
-        for (int z : new int[]{-3, 3}) {
+        for (int side : new int[]{-3, 3}) {
             buildTerrainPillar(
-                world, arena, terrain, edits, centerX + inward * 6, z, 4, teamMaterial, Material.SMOOTH_SANDSTONE
+                world,
+                arena,
+                terrain,
+                edits,
+                gateX + perpendicularX * side,
+                gateZ + perpendicularZ * side,
+                4,
+                teamMaterial,
+                Material.SMOOTH_SANDSTONE
             );
         }
 
-        int gateX = centerX + inward * 6;
-        int gateY = terrain.heightAt(gateX, 0) - arena.centerY;
+        int gateY = terrain.heightAt(gateX, gateZ) - arena.centerY;
 
-        for (int z = -2; z <= 2; z++) {
-            addAir(world, arena, edits, gateX, gateY + 4, z, Material.CHISELED_SANDSTONE);
+        for (int width = -2; width <= 2; width++) {
+            addAir(
+                world,
+                arena,
+                edits,
+                gateX + perpendicularX * width,
+                gateY + 4,
+                gateZ + perpendicularZ * width,
+                Material.CHISELED_SANDSTONE
+            );
         }
 
-        int spawnY = terrain.heightAt(centerX, 0) - arena.centerY;
-        addAir(world, arena, edits, centerX, spawnY + 1, 0, red ? Material.REDSTONE_LAMP : Material.SEA_LANTERN);
+        int spawnY = terrain.heightAt(centerX, centerZ) - arena.centerY;
+        addAir(
+            world,
+            arena,
+            edits,
+            centerX,
+            spawnY + 1,
+            centerZ,
+            teamMaterial == Material.RED_TERRACOTTA ? Material.REDSTONE_LAMP : Material.SEA_LANTERN
+        );
     }
 
     private static void buildRelicShrine(
@@ -515,24 +679,51 @@ final class ArenaGenerator {
         Material wallMaterial,
         boolean coverAlongX
     ) {
-        for (int offset = -2; offset <= 2; offset++) {
-            if (offset != 0) {
-                placeRelicWallColumn(world, arena, terrain, edits, centerX + offset, centerZ - 3, wallMaterial, 2);
-                placeRelicWallColumn(world, arena, terrain, edits, centerX + offset, centerZ + 3, wallMaterial, 2);
-                placeRelicWallColumn(world, arena, terrain, edits, centerX - 3, centerZ + offset, wallMaterial, 2);
-                placeRelicWallColumn(world, arena, terrain, edits, centerX + 3, centerZ + offset, wallMaterial, 2);
+        for (int offset = -6; offset <= 6; offset++) {
+            if (Math.abs(offset) > 1) {
+                placeRelicWallColumn(world, arena, terrain, edits, centerX + offset, centerZ - 6, wallMaterial, 2);
+                placeRelicWallColumn(world, arena, terrain, edits, centerX + offset, centerZ + 6, wallMaterial, 2);
+                placeRelicWallColumn(world, arena, terrain, edits, centerX - 6, centerZ + offset, wallMaterial, 2);
+                placeRelicWallColumn(world, arena, terrain, edits, centerX + 6, centerZ + offset, wallMaterial, 2);
             }
         }
 
-        for (int dx : new int[]{-3, 3}) {
-            for (int dz : new int[]{-3, 3}) {
+        for (int offset = -6; offset <= 6; offset++) {
+            if (Math.abs(offset) > 1 && Math.abs(offset) != 4) {
+                placeRelicWallColumn(world, arena, terrain, edits, centerX, centerZ + offset, wallMaterial, 2);
+                placeRelicWallColumn(world, arena, terrain, edits, centerX + offset, centerZ, wallMaterial, 2);
+            }
+        }
+
+        for (int dx : new int[]{-6, 6}) {
+            for (int dz : new int[]{-6, 6}) {
                 placeRelicWallColumn(
                     world, arena, terrain, edits, centerX + dx, centerZ + dz, Material.CHISELED_STONE_BRICKS, 3
                 );
             }
         }
 
-        buildLowCover(world, arena, terrain, edits, centerX, centerZ, wallMaterial, coverAlongX);
+        for (int signX : new int[]{-1, 1}) {
+            for (int signZ : new int[]{-1, 1}) {
+                for (int dx = 2; dx <= 5; dx++) {
+                    for (int dz = 2; dz <= 5; dz++) {
+                        addSurface(
+                            world,
+                            arena,
+                            terrain,
+                            edits,
+                            centerX + signX * dx,
+                            centerZ + signZ * dz,
+                            Material.CUT_SANDSTONE
+                        );
+                    }
+                }
+
+                buildLowCover(
+                    world, arena, terrain, edits, centerX + signX * 4, centerZ + signZ * 4, wallMaterial, coverAlongX
+                );
+            }
+        }
     }
 
     private static void placeRelicWallColumn(
@@ -636,44 +827,46 @@ final class ArenaGenerator {
         int teamCount
     ) {
         boolean relic = "relic_rush".equalsIgnoreCase(arena.mode);
-        Random random = new Random(seed ^ 5135597069889852739L);
+        if (!relic || teamCount < 3) {
+            Random random = new Random(seed ^ 5135597069889852739L);
 
-        Material wall = switch (random.nextInt(3)) {
-            case 0 -> Material.STONE_BRICKS;
-            case 1 -> Material.MOSSY_STONE_BRICKS;
-            default -> Material.COBBLESTONE;
-        };
-        NavigationScanner navigation = NavigationScanner.scan(arena, terrain, edits);
-        int targetPairs = relic ? 4 : 3;
-        int placedPairs = 0;
+            Material wall = switch (random.nextInt(3)) {
+                case 0 -> Material.STONE_BRICKS;
+                case 1 -> Material.MOSSY_STONE_BRICKS;
+                default -> Material.COBBLESTONE;
+            };
+            NavigationScanner navigation = NavigationScanner.scan(arena, terrain, edits);
+            int targetPairs = relic ? 4 : 3;
+            int placedPairs = 0;
 
-        for (int[] candidate : genericStructureCandidates(radius, relic, random, navigation)) {
-            if (placedPairs >= targetPairs) {
-                break;
-            }
+            for (int[] candidate : genericStructureCandidates(radius, relic, random, navigation)) {
+                if (placedPairs >= targetPairs) {
+                    break;
+                }
 
-            int x = candidate[0];
-            int z = candidate[1];
-            int template = random.nextInt(2);
-            int[][] pair = candidate[2] == 0 ? new int[][]{{-x, -z}, {x, z}} : new int[][]{{-x, z}, {x, -z}};
-            if (isGenericRegionSafe(arena, pair[0][0], pair[0][1], relic, teamCount)
-                && isGenericRegionSafe(arena, pair[1][0], pair[1][1], relic, teamCount)
-                && isGenericSiteClear(world, arena, terrain, edits, pair[0][0], pair[0][1], template)
-                && isGenericSiteClear(world, arena, terrain, edits, pair[1][0], pair[1][1], template)) {
-                Map<BlockPos, BlockEdit> beforePair = new LinkedHashMap<>(edits);
-                buildGenericStructure(world, arena, terrain, edits, pair[0][0], pair[0][1], template, wall);
-                buildGenericStructure(world, arena, terrain, edits, pair[1][0], pair[1][1], template, wall);
-                boolean housesAccessible = isGenericHouseAccessible(
-                        world, arena, terrain, edits, pair[0][0], pair[0][1]
-                    )
-                    && isGenericHouseAccessible(world, arena, terrain, edits, pair[1][0], pair[1][1]);
-                boolean routesConnected = !relic
-                    || NavigationScanner.hasRelicRoutes(arena, terrain, edits, arena.spawnOffset);
-                if (housesAccessible && routesConnected) {
-                    placedPairs++;
-                } else {
-                    edits.clear();
-                    edits.putAll(beforePair);
+                int x = candidate[0];
+                int z = candidate[1];
+                int template = random.nextInt(2);
+                int[][] pair = candidate[2] == 0 ? new int[][]{{-x, -z}, {x, z}} : new int[][]{{-x, z}, {x, -z}};
+                if (isGenericRegionSafe(arena, pair[0][0], pair[0][1], relic, teamCount)
+                    && isGenericRegionSafe(arena, pair[1][0], pair[1][1], relic, teamCount)
+                    && isGenericSiteClear(world, arena, terrain, edits, pair[0][0], pair[0][1], template)
+                    && isGenericSiteClear(world, arena, terrain, edits, pair[1][0], pair[1][1], template)) {
+                    Map<BlockPos, BlockEdit> beforePair = new LinkedHashMap<>(edits);
+                    buildGenericStructure(world, arena, terrain, edits, pair[0][0], pair[0][1], template, wall);
+                    buildGenericStructure(world, arena, terrain, edits, pair[1][0], pair[1][1], template, wall);
+                    boolean housesAccessible = isGenericHouseAccessible(
+                            world, arena, terrain, edits, pair[0][0], pair[0][1]
+                        )
+                        && isGenericHouseAccessible(world, arena, terrain, edits, pair[1][0], pair[1][1]);
+                    boolean routesConnected = !relic
+                        || NavigationScanner.hasRelicRoutes(arena, terrain, edits, arena.spawnOffset, teamCount);
+                    if (housesAccessible && routesConnected) {
+                        placedPairs++;
+                    } else {
+                        edits.clear();
+                        edits.putAll(beforePair);
+                    }
                 }
             }
         }
@@ -1127,13 +1320,14 @@ final class ArenaGenerator {
         Block block = world.getBlockAt(arena.centerX + x, arena.centerY + y, arena.centerZ + z);
         if (!(block.getState() instanceof TileState)) {
             BlockEdit planned = edits.get(new BlockPos(x, y, z));
-            if (planned == null
-                || planned.material.isAir()
-                || !planned.material.isSolid()
-                || planned.material == blockData.getMaterial()) {
-                if (planned != null || block.isPassable()) {
-                    edits.put(new BlockPos(x, y, z), new BlockEdit(x, y, z, blockData));
-                }
+            if ((
+                    planned == null
+                        || planned.material.isAir()
+                        || !planned.material.isSolid()
+                        || planned.material == blockData.getMaterial()
+                )
+                && (planned != null || block.isPassable())) {
+                edits.put(new BlockPos(x, y, z), new BlockEdit(x, y, z, blockData));
             }
         }
     }

@@ -526,31 +526,17 @@ public final class ArenaSystemPlugin extends JavaPlugin implements Listener {
     }
 
     int activeTeamCount(String arenaName, String mode) {
-        return !"tdm".equalsIgnoreCase(mode)
-            ? 2
-            : Math.max(2, Math.min(4, this.getConfig().getInt("arenas." + arenaName + ".team-count", 2)));
+        return Math.max(2, Math.min(4, this.getConfig().getInt("arenas." + arenaName + ".team-count", 2)));
     }
 
     int teamCountFor(ArenaData arena) {
-        return arena != null && "tdm".equalsIgnoreCase(arena.mode)
-            ? Math.max(2, Math.min(4, this.getConfig().getInt("arenas." + arena.name + ".team-count", 2)))
-            : 2;
+        return arena == null
+            ? 2
+            : Math.max(2, Math.min(4, this.getConfig().getInt("arenas." + arena.name + ".team-count", 2)));
     }
 
     List<String> teamNamesFor(ArenaData arena) {
-        List<String> names = new ArrayList<>(List.of("red", "blue"));
-        if (arena != null && "tdm".equalsIgnoreCase(arena.mode)) {
-            int count = this.teamCountFor(arena);
-            if (count >= 3) {
-                names.add("green");
-            }
-
-            if (count >= 4) {
-                names.add("yellow");
-            }
-        }
-
-        return names;
+        return RelicTeamLayout.teamNames(this.teamCountFor(arena));
     }
 
     ChatColor teamColor(String team) {
@@ -571,10 +557,6 @@ public final class ArenaSystemPlugin extends JavaPlugin implements Listener {
         ArenaData arena = this.arenas.get(arenaName.toLowerCase(Locale.ROOT));
         if (arena == null) {
             sender.sendMessage(ChatColor.RED + "Arena tidak ditemukan.");
-        } else if (!"tdm".equalsIgnoreCase(arena.mode)) {
-            sender.sendMessage(
-                ChatColor.RED + "Penambahan 3-4 tim saat ini hanya didukung mode TDM. Relic Rush tetap 2 tim."
-            );
         } else if (this.matches.containsKey(arena.name)) {
             sender.sendMessage(ChatColor.RED + "Hentikan/reset antrean atau pertandingan sebelum mengubah jumlah tim.");
         } else {
@@ -812,17 +794,21 @@ public final class ArenaSystemPlugin extends JavaPlugin implements Listener {
 
                         TerrainNormalizer.Result normalization;
                         try {
+                            boolean relicRush = "relic_rush".equalsIgnoreCase(mode);
                             TerrainProfile blended = SeededTerrainBlender.blend(
                                 originalProfile,
                                 seed,
                                 spawnOffset,
                                 activeTeams,
+                                relicRush,
                                 maxSeedDelta,
                                 world.getMinHeight(),
                                 world.getMaxHeight()
                             );
                             normalization = TerrainNormalizer.normalize(
-                                blended, maxAdjacentStep, SeededTerrainBlender.anchors(spawnOffset, activeTeams)
+                                blended,
+                                maxAdjacentStep,
+                                SeededTerrainBlender.anchors(spawnOffset, activeTeams, relicRush)
                             );
                         } catch (IllegalStateException | IllegalArgumentException ex) {
                             ArenaSystemPlugin.this.abortBeforeBuild(
@@ -2685,30 +2671,28 @@ public final class ArenaSystemPlugin extends JavaPlugin implements Listener {
                 player.sendMessage(
                     ChatColor.GREEN + "Resource pack ArenaSystem berhasil dimuat. Model Assassin Dagger siap."
                 );
-            } else {
-                if (status == Status.DECLINED
-                    || status == Status.FAILED_DOWNLOAD
-                    || status == Status.FAILED_RELOAD
-                    || status == Status.INVALID_URL
-                    || status == Status.DISCARDED) {
-                    player.sendMessage(
-                        ChatColor.RED
-                            + "Resource pack ArenaSystem belum aktif. "
-                            + ChatColor.YELLOW
-                            + "Model Assassin Dagger bisa tampil ungu/hitam."
+            } else if (status == Status.DECLINED
+                || status == Status.FAILED_DOWNLOAD
+                || status == Status.FAILED_RELOAD
+                || status == Status.INVALID_URL
+                || status == Status.DISCARDED) {
+                player.sendMessage(
+                    ChatColor.RED
+                        + "Resource pack ArenaSystem belum aktif. "
+                        + ChatColor.YELLOW
+                        + "Model Assassin Dagger bisa tampil ungu/hitam."
+                );
+                player.sendMessage(
+                    ChatColor.GRAY + "Aktifkan server resource pack atau pasang pack AssassinDagger 26.3."
+                );
+                this.getLogger()
+                    .info(
+                        "Resource pack ArenaSystem belum aktif untuk "
+                            + player.getName()
+                            + " (status: "
+                            + status
+                            + ")."
                     );
-                    player.sendMessage(
-                        ChatColor.GRAY + "Aktifkan server resource pack atau pasang pack AssassinDagger 26.3."
-                    );
-                    this.getLogger()
-                        .info(
-                            "Resource pack ArenaSystem belum aktif untuk "
-                                + player.getName()
-                                + " (status: "
-                                + status
-                                + ")."
-                        );
-                }
             }
         }
     }
@@ -2927,12 +2911,10 @@ public final class ArenaSystemPlugin extends JavaPlugin implements Listener {
                                                         this.cancel();
                                                         state.preparationTimer = null;
                                                         ArenaSystemPlugin.this.launchMatch(arena, state);
-                                                    } else {
-                                                        if (state.preparationSecondsRemaining <= 5) {
-                                                            ArenaSystemPlugin.this.showPreparationCountdown(
-                                                                state, state.preparationSecondsRemaining
-                                                            );
-                                                        }
+                                                    } else if (state.preparationSecondsRemaining <= 5) {
+                                                        ArenaSystemPlugin.this.showPreparationCountdown(
+                                                            state, state.preparationSecondsRemaining
+                                                        );
                                                     }
                                                 } else {
                                                     this.cancel();
@@ -5223,7 +5205,6 @@ public final class ArenaSystemPlugin extends JavaPlugin implements Listener {
                         row++;
                         rowNames.setLength(0);
                         prefix = "↳ ";
-                        int var19 = false;
                     }
 
                     if (!rowNames.isEmpty()) {
@@ -5339,6 +5320,14 @@ public final class ArenaSystemPlugin extends JavaPlugin implements Listener {
 
     Location spawnLocation(ArenaData arena, String team) {
         World world = Bukkit.getWorld(arena.worldName);
+        if ("relic_rush".equalsIgnoreCase(arena.mode)) {
+            int[] offset = RelicTeamLayout.offset(team, this.teamCountFor(arena), arena.spawnOffset);
+            int x = arena.centerX + offset[0];
+            int z = arena.centerZ + offset[1];
+            float yaw = (float)Math.toDegrees(Math.atan2(offset[0], -offset[1]));
+            return new Location(world, x + 0.5, world.getHighestBlockYAt(x, z) + 1.0, z + 0.5, yaw, 0.0F);
+        }
+
         int spawnOffset = arena.spawnOffset;
 
         Location spawn = switch (team.toLowerCase(Locale.ROOT)) {

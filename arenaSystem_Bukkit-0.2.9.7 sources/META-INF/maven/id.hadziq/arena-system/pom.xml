@@ -10,7 +10,7 @@
     <packaging>jar</packaging>
 
     <name>ArenaSystem</name>
-    <description>Hybrid terrain arena generator and team match plugin for Paper.</description>
+    <description>Hybrid terrain arena generator and team match plugin for Paper 26.3.</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

@@ -238,7 +238,7 @@ final class PlayerSnapshot {
                     if (ConfigurationSerialization.deserializeObject(serialized) instanceof PotionEffect effect) {
                         effects.add(effect);
                     }
-                } catch (IllegalArgumentException var17) {
+                } catch (IllegalArgumentException var18) {
                 }
             }
         }

@@ -140,10 +140,8 @@ final class MobProtectionListener implements Listener {
         Entity entity = event.getEntity();
         if (this.isBlastMineMarker(entity)) {
             event.setCancelled(false);
-        } else if (this.isArenaBlockedMob(entity)) {
-            if (this.plugin.findArenaFootprint(event.getLocation()) != null) {
-                event.setCancelled(true);
-            }
+        } else if (this.isArenaBlockedMob(entity) && this.plugin.findArenaFootprint(event.getLocation()) != null) {
+            event.setCancelled(true);
         }
     }
 
@@ -155,10 +153,8 @@ final class MobProtectionListener implements Listener {
             Location to = event.getTo();
             if (to != null) {
                 ArenaData destinationArena = this.plugin.findArenaFootprint(to);
-                if (destinationArena != null) {
-                    if (this.plugin.findArenaFootprint(from) != destinationArena) {
-                        event.setCancelled(true);
-                    }
+                if (destinationArena != null && this.plugin.findArenaFootprint(from) != destinationArena) {
+                    event.setCancelled(true);
                 }
             }
         }
@@ -171,10 +167,8 @@ final class MobProtectionListener implements Listener {
             Location to = event.getTo();
             if (to != null) {
                 ArenaData destinationArena = this.plugin.findArenaFootprint(to);
-                if (destinationArena != null) {
-                    if (this.plugin.findArenaFootprint(event.getFrom()) != destinationArena) {
-                        event.setCancelled(true);
-                    }
+                if (destinationArena != null && this.plugin.findArenaFootprint(event.getFrom()) != destinationArena) {
+                    event.setCancelled(true);
                 }
             }
         }
@@ -220,10 +214,10 @@ final class MobProtectionListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onHostileEntityDamage(EntityDamageByEntityEvent event) {
-        if (event.getEntity() instanceof Player player && this.isProtectedPlayer(player)) {
-            if (this.isHostileDamageSource(event.getDamager())) {
-                event.setCancelled(true);
-            }
+        if (event.getEntity() instanceof Player player
+            && this.isProtectedPlayer(player)
+            && this.isHostileDamageSource(event.getDamager())) {
+            event.setCancelled(true);
         }
     }
 
@@ -258,10 +252,10 @@ final class MobProtectionListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onProtectedPlayerDarknessTick(EntityEffectTickEvent event) {
-        if (event.getEntity() instanceof Player player && this.isProtectedPlayer(player)) {
-            if (PotionEffectType.DARKNESS.equals(event.getType())) {
-                event.setCancelled(true);
-            }
+        if (event.getEntity() instanceof Player player
+            && this.isProtectedPlayer(player)
+            && PotionEffectType.DARKNESS.equals(event.getType())) {
+            event.setCancelled(true);
         }
     }
 
@@ -286,10 +280,10 @@ final class MobProtectionListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onHostileCombustParticipant(EntityCombustByEntityEvent event) {
-        if (event.getEntity() instanceof Player player && this.isProtectedPlayer(player)) {
-            if (this.isHostileDamageSource(event.getCombuster())) {
-                event.setCancelled(true);
-            }
+        if (event.getEntity() instanceof Player player
+            && this.isProtectedPlayer(player)
+            && this.isHostileDamageSource(event.getCombuster())) {
+            event.setCancelled(true);
         }
     }
 

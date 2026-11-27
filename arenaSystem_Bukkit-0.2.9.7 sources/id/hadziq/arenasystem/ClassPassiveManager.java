@@ -246,12 +246,10 @@ final class ClassPassiveManager implements Listener {
     public void onPassiveMovement(PlayerMoveEvent event) {
         Location from = event.getFrom();
         Location to = event.getTo();
-        if (to != null && from.getWorld().equals(to.getWorld())) {
-            if (!(from.distanceSquared(to) <= 0.0025)) {
-                ClassPassiveManager.PlayerPassiveState state = this.stateFor(event.getPlayer());
-                if (state != null && state.passiveId() == ClassPassiveManager.PassiveId.STEADY_AIM) {
-                    state.setDeadline("steady_aim.still_since", System.currentTimeMillis());
-                }
+        if (to != null && from.getWorld().equals(to.getWorld()) && !(from.distanceSquared(to) <= 0.0025)) {
+            ClassPassiveManager.PlayerPassiveState state = this.stateFor(event.getPlayer());
+            if (state != null && state.passiveId() == ClassPassiveManager.PassiveId.STEADY_AIM) {
+                state.setDeadline("steady_aim.still_since", System.currentTimeMillis());
             }
         }
     }

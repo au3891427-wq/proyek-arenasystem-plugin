@@ -193,17 +193,17 @@ final class PluginUpdateNotifier implements Listener {
     private static URI parseManifestUri(String value) {
         try {
             URI uri = URI.create(value != null && !value.isBlank() ? value : DEFAULT_MANIFEST_URI.toString());
-            if ("https".equalsIgnoreCase(uri.getScheme())
-                && "raw.githubusercontent.com".equalsIgnoreCase(uri.getHost())
-                && uri.getRawUserInfo() == null
-                && uri.getRawFragment() == null
-                && uri.getRawQuery() == null
-                && (uri.getPort() == -1 || uri.getPort() == 443)) {
-                return uri;
-            } else {
+            if (!"https".equalsIgnoreCase(uri.getScheme())
+                || !"raw.githubusercontent.com".equalsIgnoreCase(uri.getHost())
+                || uri.getRawUserInfo() != null
+                || uri.getRawFragment() != null
+                || uri.getRawQuery() != null
+                || uri.getPort() != -1 && uri.getPort() != 443) {
                 throw new IllegalArgumentException(
                     "updates.manifest-url must be an HTTPS raw.githubusercontent.com URL."
                 );
+            } else {
+                return uri;
             }
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("Invalid updates.manifest-url configuration.", exception);

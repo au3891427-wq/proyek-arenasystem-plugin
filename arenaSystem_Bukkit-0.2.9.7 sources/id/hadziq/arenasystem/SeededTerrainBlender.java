@@ -24,18 +24,32 @@ final class SeededTerrainBlender {
     }
 
     static List<int[]> anchors(int spawnOffset, int teamCount) {
-        List<int[]> anchors = new ArrayList<>();
-        anchors.add(new int[]{-spawnOffset, 0});
-        anchors.add(new int[]{spawnOffset, 0});
-        if (teamCount >= 3) {
-            anchors.add(new int[]{0, -spawnOffset});
-        }
+        return anchors(spawnOffset, teamCount, false);
+    }
 
-        if (teamCount >= 4) {
-            anchors.add(new int[]{0, spawnOffset});
-        }
+    static List<int[]> anchors(int spawnOffset, int teamCount, boolean relicRush) {
+        if (!relicRush) {
+            List<int[]> anchors = new ArrayList<>();
+            anchors.add(new int[]{-spawnOffset, 0});
+            anchors.add(new int[]{spawnOffset, 0});
+            if (teamCount >= 3) {
+                anchors.add(new int[]{0, -spawnOffset});
+            }
 
-        return anchors;
+            if (teamCount >= 4) {
+                anchors.add(new int[]{0, spawnOffset});
+            }
+
+            return anchors;
+        } else {
+            List<int[]> anchors = new ArrayList<>();
+
+            for (String team : RelicTeamLayout.teamNames(teamCount)) {
+                anchors.add(RelicTeamLayout.offset(team, teamCount, spawnOffset));
+            }
+
+            return anchors;
+        }
     }
 
     static TerrainProfile blend(
@@ -43,6 +57,19 @@ final class SeededTerrainBlender {
         long seed,
         int spawnOffset,
         int teamCount,
+        int maxSeedDelta,
+        int worldMinY,
+        int worldMaxY
+    ) {
+        return blend(scanned, seed, spawnOffset, teamCount, false, maxSeedDelta, worldMinY, worldMaxY);
+    }
+
+    static TerrainProfile blend(
+        TerrainProfile scanned,
+        long seed,
+        int spawnOffset,
+        int teamCount,
+        boolean relicRush,
         int maxSeedDelta,
         int worldMinY,
         int worldMaxY
@@ -65,7 +92,7 @@ final class SeededTerrainBlender {
                 int base = scanned.heightAt(x, z);
                 int delta = 0;
                 if (maxSeedDelta > 0) {
-                    double mask = fairnessMask(x, z, spawnOffset, teamCount);
+                    double mask = fairnessMask(x, z, spawnOffset, teamCount, relicRush);
                     double noise = 0.0;
 
                     for (int octave = 0; octave < CELL.length; octave++) {
@@ -87,23 +114,43 @@ final class SeededTerrainBlender {
     }
 
     static double fairnessMask(int x, int z, int spawnOffset, int teamCount) {
+        return fairnessMask(x, z, spawnOffset, teamCount, false);
+    }
+
+    static double fairnessMask(int x, int z, int spawnOffset, int teamCount, boolean relicRush) {
         double mask = 1.0;
 
-        for (int[] anchor : anchors(spawnOffset, teamCount)) {
+        for (int[] anchor : anchors(spawnOffset, teamCount, relicRush)) {
             int d = Math.max(0, Math.abs(x - anchor[0]) - 4) + Math.max(0, Math.abs(z - anchor[1]) - 4);
             mask = Math.min(mask, smooth(d / 12.0));
         }
 
         int objective = Math.max(0, Math.max(Math.abs(x), Math.abs(z)) - 4);
         mask = Math.min(mask, smooth(objective / 10.0));
-        if (Math.abs(x) <= spawnOffset) {
-            mask = Math.min(mask, 0.35 + 0.65 * smooth(Math.abs(z) / 10.0));
-        }
+        if (relicRush) {
+            for (int[] anchor : anchors(spawnOffset, teamCount, true)) {
+                double vx = -anchor[0];
+                double vz = -anchor[1];
+                double lengthSquared = vx * vx + vz * vz;
+                if (lengthSquared != 0.0) {
+                    double projection = ((x - anchor[0]) * vx + (z - anchor[1]) * vz) / lengthSquared;
+                    if (projection >= 0.0 && projection <= 1.0) {
+                        double perpendicular = Math.abs(vx * (z - anchor[1]) - vz * (x - anchor[0]))
+                            / Math.sqrt(lengthSquared);
+                        mask = Math.min(mask, 0.35 + 0.65 * smooth(perpendicular / 10.0));
+                    }
+                }
+            }
+        } else {
+            if (Math.abs(x) <= spawnOffset) {
+                mask = Math.min(mask, 0.35 + 0.65 * smooth(Math.abs(z) / 10.0));
+            }
 
-        boolean greenLane = teamCount >= 3 && z <= 0 && z >= -spawnOffset;
-        boolean yellowLane = teamCount >= 4 && z >= 0 && z <= spawnOffset;
-        if (greenLane || yellowLane) {
-            mask = Math.min(mask, 0.35 + 0.65 * smooth(Math.abs(x) / 10.0));
+            boolean greenLane = teamCount >= 3 && z <= 0 && z >= -spawnOffset;
+            boolean yellowLane = teamCount >= 4 && z >= 0 && z <= spawnOffset;
+            if (greenLane || yellowLane) {
+                mask = Math.min(mask, 0.35 + 0.65 * smooth(Math.abs(x) / 10.0));
+            }
         }
 
         return mask;
@@ -123,7 +170,7 @@ final class SeededTerrainBlender {
 
     private static double lattice(long salted, int octave, int ix, int iz) {
         long h = mix(salted ^ octave * -7046029254386353131L ^ ix * -4417276706812531889L ^ iz * 1609587929392839161L);
-        return (h >>> 11) * 1.110223E-16F * 2.0 - 1.0;
+        return (float)(h >>> 11) * 1.110223E-16F * 2.0 - 1.0;
     }
 
     private static double smooth(double t) {

@@ -97,12 +97,10 @@ final class PlayerArenaListener implements Listener {
                                     )
                                 );
                             event.getPlayer().sendMessage(ChatColor.YELLOW + "Kamu dikembalikan ke area tengah arena.");
-                        } else {
-                            if (Math.abs(to.getBlockX() - arena.centerX) > arena.radius
-                                || Math.abs(to.getBlockZ() - arena.centerZ) > arena.radius
-                                || to.getY() > arena.maxSurfaceY + 32) {
-                                event.setTo(event.getFrom());
-                            }
+                        } else if (Math.abs(to.getBlockX() - arena.centerX) > arena.radius
+                            || Math.abs(to.getBlockZ() - arena.centerZ) > arena.radius
+                            || to.getY() > arena.maxSurfaceY + 32) {
+                            event.setTo(event.getFrom());
                         }
                     }
                 }
@@ -389,12 +387,10 @@ final class PlayerArenaListener implements Listener {
         BukkitTask task = Bukkit.getScheduler().runTaskLater(this.plugin, () -> {
             this.respawnTasks.remove(victimId);
             MatchState active = this.plugin.matches.get(arena.name);
-            if (active != null && active.running && victim.isOnline() && team.equals(active.teams.get(victimId))) {
-                if (victim.isDead()) {
-                    victim.spigot().respawn();
-                }
-            } else {
+            if (active == null || !active.running || !victim.isOnline() || !team.equals(active.teams.get(victimId))) {
                 this.pendingDeathCameras.remove(victimId);
+            } else if (victim.isDead()) {
+                victim.spigot().respawn();
             }
         }, 1L);
         this.respawnTasks.put(victimId, task);

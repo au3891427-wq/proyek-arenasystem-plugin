@@ -212,25 +212,25 @@ final class SnapshotStore {
             }
 
             int count = input.readInt();
-            if (count >= 0 && count <= 2000000) {
-                for (int i = 0; i < count; i++) {
-                    int x = input.readInt();
-                    int y = input.readInt();
-                    int z = input.readInt();
-                    String blockData = input.readUTF();
-                    BlockPos position = new BlockPos(x, y, z);
-                    if (result.put(position, blockData) != null) {
-                        throw new IOException("Snapshot memiliki posisi blok duplikat: " + x + "," + y + "," + z);
-                    }
-                }
-
-                if (input.read() == -1) {
-                    return new SnapshotStore.LoadedSnapshot(result, originY, legacy);
-                } else {
-                    throw new IOException("Snapshot memiliki data tambahan yang tidak dikenal.");
-                }
-            } else {
+            if (count < 0 || count > 2000000) {
                 throw new IOException("Jumlah blok snapshot tidak valid: " + count);
+            }
+
+            for (int i = 0; i < count; i++) {
+                int x = input.readInt();
+                int y = input.readInt();
+                int z = input.readInt();
+                String blockData = input.readUTF();
+                BlockPos position = new BlockPos(x, y, z);
+                if (result.put(position, blockData) != null) {
+                    throw new IOException("Snapshot memiliki posisi blok duplikat: " + x + "," + y + "," + z);
+                }
+            }
+
+            if (input.read() != -1) {
+                throw new IOException("Snapshot memiliki data tambahan yang tidak dikenal.");
+            } else {
+                return new SnapshotStore.LoadedSnapshot(result, originY, legacy);
             }
         } catch (IOException ex) {
             throw new IOException("Gagal memvalidasi snapshot " + source.getName() + ": " + ex.getMessage(), ex);

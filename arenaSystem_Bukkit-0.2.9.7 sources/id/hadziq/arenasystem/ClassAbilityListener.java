@@ -696,19 +696,17 @@ final class ClassAbilityListener implements Listener {
                 event.setCancelled(true);
                 if (this.acceptAssassinOffhandInput(player)) {
                     this.playAssassinOffhandSwing(player);
-                    if (event.getRightClicked() instanceof Player target) {
-                        if (this.isEnemy(player, target, state)) {
-                            if (!target.isDead()
-                                && target.getGameMode() == GameMode.SURVIVAL
-                                && player.getWorld().equals(target.getWorld())
-                                && !(
-                                    player.getEyeLocation().distanceSquared(target.getLocation().add(0.0, 1.0, 0.0))
-                                        > 10.240000000000002
-                                )
-                                && player.hasLineOfSight(target)) {
-                                this.performAssassinOffhandStrike(player, target);
-                            }
-                        }
+                    if (event.getRightClicked() instanceof Player target
+                        && this.isEnemy(player, target, state)
+                        && !target.isDead()
+                        && target.getGameMode() == GameMode.SURVIVAL
+                        && player.getWorld().equals(target.getWorld())
+                        && !(
+                            player.getEyeLocation().distanceSquared(target.getLocation().add(0.0, 1.0, 0.0))
+                                > 10.240000000000002
+                        )
+                        && player.hasLineOfSight(target)) {
+                        this.performAssassinOffhandStrike(player, target);
                     }
                 }
             }
@@ -831,19 +829,15 @@ final class ClassAbilityListener implements Listener {
                 if (!this.hasValidSniperMark(player)) {
                     this.clearSniperMarkOwnedBy(id);
                     player.sendActionBar(ChatColor.GRAY + "MARK tidak lagi valid");
+                } else if (this.sniperAimLocked.remove(id)) {
+                    player.sendActionBar(ChatColor.GRAY + "AIM LOCK OFF");
                 } else {
-                    if (this.sniperAimLocked.remove(id)) {
-                        player.sendActionBar(ChatColor.GRAY + "AIM LOCK OFF");
-                    } else {
-                        this.sniperAimLocked.add(id);
-                        player.sendActionBar(ChatColor.AQUA + "AIM LOCK ON — bidikan mengikuti target MARK");
-                    }
+                    this.sniperAimLocked.add(id);
+                    player.sendActionBar(ChatColor.AQUA + "AIM LOCK ON — bidikan mengikuti target MARK");
                 }
-            } else {
-                if (this.plugin.readClassSkill(event.getItemDrop().getItemStack()) != null) {
-                    event.setCancelled(true);
-                    player.sendMessage(ChatColor.YELLOW + "Item skill class tidak dapat dijatuhkan.");
-                }
+            } else if (this.plugin.readClassSkill(event.getItemDrop().getItemStack()) != null) {
+                event.setCancelled(true);
+                player.sendMessage(ChatColor.YELLOW + "Item skill class tidak dapat dijatuhkan.");
             }
         }
     }
@@ -898,10 +892,8 @@ final class ClassAbilityListener implements Listener {
                         player.sendMessage(ChatColor.GREEN + "Panah Pinning Shot dilepaskan! Cooldown dimulai.");
                         this.startSkillCooldown(player, state, "archer_pinning_shot", Material.SPECTRAL_ARROW);
                     }
-                } else {
-                    if (readyUntil != null) {
-                        this.archerPinningReady.remove(playerId, readyUntil);
-                    }
+                } else if (readyUntil != null) {
+                    this.archerPinningReady.remove(playerId, readyUntil);
                 }
             }
         }
@@ -1039,40 +1031,33 @@ final class ClassAbilityListener implements Listener {
             && event.getHitEntity() instanceof LivingEntity target) {
             MatchState state = this.activeTdmMatch(attacker);
             if (state != null
-                && "ninja".equalsIgnoreCase(state.selectedClasses.getOrDefault(attacker.getUniqueId(), "knight"))) {
-                if (target instanceof Player targetPlayer
-                    && this.activeTdmMatch(targetPlayer) == state
-                    && this.isEnemy(attacker, targetPlayer, state)) {
-                    Vector push = target.getLocation().toVector().subtract(attacker.getLocation().toVector());
+                && "ninja".equalsIgnoreCase(state.selectedClasses.getOrDefault(attacker.getUniqueId(), "knight"))
+                && target instanceof Player targetPlayer
+                && this.activeTdmMatch(targetPlayer) == state
+                && this.isEnemy(attacker, targetPlayer, state)) {
+                Vector push = target.getLocation().toVector().subtract(attacker.getLocation().toVector());
+                push.setY(0);
+                if (push.lengthSquared() < 1.0E-4) {
+                    push = snowball.getVelocity().clone();
                     push.setY(0);
-                    if (push.lengthSquared() < 1.0E-4) {
-                        push = snowball.getVelocity().clone();
-                        push.setY(0);
-                    }
+                }
 
-                    if (!(push.lengthSquared() < 1.0E-4)) {
-                        push.normalize().multiply(0.65);
-                        push.setY(0.22);
-                        target.setVelocity(target.getVelocity().add(push));
-                        target.getWorld()
-                            .spawnParticle(
-                                Particle.SNOWFLAKE,
-                                target.getLocation().add(0.0, 1.0, 0.0),
-                                10,
-                                0.28,
-                                0.32,
-                                0.28,
-                                0.015
-                            );
-                        target.getWorld()
-                            .spawnParticle(
-                                Particle.CRIT, target.getLocation().add(0.0, 1.0, 0.0), 5, 0.22, 0.25, 0.22, 0.02
-                            );
-                        target.getWorld().playSound(target.getLocation(), Sound.BLOCK_SNOW_BREAK, 0.65F, 1.25F);
-                        targetPlayer.sendMessage(
-                            ChatColor.YELLOW + "Kamu terdorong oleh Snowball Ninja dari " + attacker.getName() + "!"
+                if (!(push.lengthSquared() < 1.0E-4)) {
+                    push.normalize().multiply(0.65);
+                    push.setY(0.22);
+                    target.setVelocity(target.getVelocity().add(push));
+                    target.getWorld()
+                        .spawnParticle(
+                            Particle.SNOWFLAKE, target.getLocation().add(0.0, 1.0, 0.0), 10, 0.28, 0.32, 0.28, 0.015
                         );
-                    }
+                    target.getWorld()
+                        .spawnParticle(
+                            Particle.CRIT, target.getLocation().add(0.0, 1.0, 0.0), 5, 0.22, 0.25, 0.22, 0.02
+                        );
+                    target.getWorld().playSound(target.getLocation(), Sound.BLOCK_SNOW_BREAK, 0.65F, 1.25F);
+                    targetPlayer.sendMessage(
+                        ChatColor.YELLOW + "Kamu terdorong oleh Snowball Ninja dari " + attacker.getName() + "!"
+                    );
                 }
             }
         }

@@ -43,7 +43,7 @@ protection:
   global: {}
   arenas: {}
 
-# Relic Rush is objective-only: one equal Relic Runner kit for both teams.
+# Relic Rush is objective-only: one equal Relic Runner kit for every active team (2-4).
 
 
 # Active TDM class skills. Durations and cooldowns are in seconds.

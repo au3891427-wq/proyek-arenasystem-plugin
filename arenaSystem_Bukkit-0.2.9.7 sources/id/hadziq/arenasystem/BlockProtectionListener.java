@@ -82,17 +82,13 @@ final class BlockProtectionListener implements Listener {
                 event.setCancelled(true);
                 event.getPlayer()
                     .sendMessage(ChatColor.RED + "Arena sedang dibangun atau dipulihkan; blok tidak dapat diubah.");
-            } else {
-                if (this.plugin.isPreparing(arena)
-                    || event.getBlockReplacedState() instanceof TileState
-                    || !this.plugin.isActionAllowed("place", arena, event.getPlayer())) {
-                    event.setCancelled(true);
-                    if (!this.plugin.isMatchRunning(arena)) {
-                        event.getPlayer()
-                            .sendMessage(
-                                ChatColor.RED + "Kamu tidak diizinkan memasang blok di arena " + arena.name + "."
-                            );
-                    }
+            } else if (this.plugin.isPreparing(arena)
+                || event.getBlockReplacedState() instanceof TileState
+                || !this.plugin.isActionAllowed("place", arena, event.getPlayer())) {
+                event.setCancelled(true);
+                if (!this.plugin.isMatchRunning(arena)) {
+                    event.getPlayer()
+                        .sendMessage(ChatColor.RED + "Kamu tidak diizinkan memasang blok di arena " + arena.name + ".");
                 }
             }
         }
@@ -128,29 +124,26 @@ final class BlockProtectionListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onArenaExplosionDamage(EntityDamageEvent event) {
         DamageCause cause = event.getCause();
-        if (cause == DamageCause.BLOCK_EXPLOSION || cause == DamageCause.ENTITY_EXPLOSION) {
-            if (this.plugin.findArenaFootprint(event.getEntity().getLocation()) != null) {
-                event.setCancelled(true);
-            }
+        if ((cause == DamageCause.BLOCK_EXPLOSION || cause == DamageCause.ENTITY_EXPLOSION)
+            && this.plugin.findArenaFootprint(event.getEntity().getLocation()) != null) {
+            event.setCancelled(true);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onArenaExplosionKnockback(EntityKnockbackEvent event) {
-        if (event.getCause() == Cause.EXPLOSION) {
-            if (this.plugin.findArenaFootprint(event.getEntity().getLocation()) != null) {
-                event.setCancelled(true);
-            }
+        if (event.getCause() == Cause.EXPLOSION
+            && this.plugin.findArenaFootprint(event.getEntity().getLocation()) != null) {
+            event.setCancelled(true);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onArenaExplosionIgnite(BlockIgniteEvent event) {
         IgniteCause cause = event.getCause();
-        if (cause == IgniteCause.EXPLOSION || cause == IgniteCause.SPREAD) {
-            if (this.plugin.findArenaFootprint(event.getBlock().getLocation()) != null) {
-                event.setCancelled(true);
-            }
+        if ((cause == IgniteCause.EXPLOSION || cause == IgniteCause.SPREAD)
+            && this.plugin.findArenaFootprint(event.getBlock().getLocation()) != null) {
+            event.setCancelled(true);
         }
     }
 
@@ -163,10 +156,9 @@ final class BlockProtectionListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onArenaHangingExplosion(HangingBreakEvent event) {
-        if (event.getCause() == RemoveCause.EXPLOSION) {
-            if (this.plugin.findArenaFootprint(event.getEntity().getLocation()) != null) {
-                event.setCancelled(true);
-            }
+        if (event.getCause() == RemoveCause.EXPLOSION
+            && this.plugin.findArenaFootprint(event.getEntity().getLocation()) != null) {
+            event.setCancelled(true);
         }
     }
 

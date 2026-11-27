@@ -1,5 +1,6 @@
 package id.hadziq.arenasystem;
 
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 import org.bukkit.Material;
@@ -58,13 +59,21 @@ final class NavigationScanner {
     }
 
     static boolean hasRelicRoutes(
-        ArenaData arena, TerrainProfile terrain, Map<BlockPos, BlockEdit> edits, int spawnOffset
+        ArenaData arena, TerrainProfile terrain, Map<BlockPos, BlockEdit> edits, int spawnOffset, int teamCount
     ) {
-        return connected(arena, terrain, edits, -spawnOffset + 6, 0, 7, 0)
-            && connected(arena, terrain, edits, spawnOffset - 6, 0, 7, 0);
+        for (String team : RelicTeamLayout.teamNames(teamCount)) {
+            int[] spawn = RelicTeamLayout.offset(team, teamCount, spawnOffset);
+            int startX = spawn[0] - Integer.signum(spawn[0]) * 6;
+            int startZ = spawn[1] - Integer.signum(spawn[1]) * 6;
+            if (!hasTwoPaths(arena, terrain, edits, startX, startZ, 0, 0)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
-    private static boolean connected(
+    private static boolean hasTwoPaths(
         ArenaData arena,
         TerrainProfile terrain,
         Map<BlockPos, BlockEdit> edits,
@@ -73,14 +82,66 @@ final class NavigationScanner {
         int goalX,
         int goalZ
     ) {
+        boolean[][] firstPath = findPath(arena, terrain, edits, startX, startZ, goalX, goalZ, null);
+        if (firstPath == null) {
+            return false;
+        }
+
         int radius = terrain.radius();
-        boolean[][] visited = new boolean[radius * 2 + 1][radius * 2 + 1];
-        int capacity = (radius * 2 + 1) * (radius * 2 + 1);
-        int[] queueX = new int[capacity];
-        int[] queueZ = new int[capacity];
-        int head = 0;
-        int tail = 0;
+        boolean[][] clearance = new boolean[radius * 2 + 1][radius * 2 + 1];
+
+        for (int x = -radius; x <= radius; x++) {
+            for (int z = -radius; z <= radius; z++) {
+                if (firstPath[x + radius][z + radius]) {
+                    int fromStart = Math.abs(x - startX) + Math.abs(z - startZ);
+                    int fromGoal = Math.abs(x - goalX) + Math.abs(z - goalZ);
+                    if (fromStart > 4 && fromGoal > 4) {
+                        for (int dx = -2; dx <= 2; dx++) {
+                            for (int dz = -2; dz <= 2; dz++) {
+                                int nx = x + dx;
+                                int nz = z + dz;
+                                if (Math.abs(nx) <= radius && Math.abs(nz) <= radius) {
+                                    clearance[nx + radius][nz + radius] = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        clearance[startX + radius][startZ + radius] = false;
+        clearance[goalX + radius][goalZ + radius] = false;
+        return findPath(arena, terrain, edits, startX, startZ, goalX, goalZ, clearance) != null;
+    }
+
+    private static boolean[][] findPath(
+        ArenaData arena,
+        TerrainProfile terrain,
+        Map<BlockPos, BlockEdit> edits,
+        int startX,
+        int startZ,
+        int goalX,
+        int goalZ,
+        boolean[][] blocked
+    ) {
+        int radius = terrain.radius();
+        int size = radius * 2 + 1;
+        boolean[][] visited = new boolean[size][size];
+        int[][] parentX = new int[size][size];
+        int[][] parentZ = new int[size][size];
+
+        for (int x = 0; x < size; x++) {
+            Arrays.fill(parentX[x], Integer.MIN_VALUE);
+            Arrays.fill(parentZ[x], Integer.MIN_VALUE);
+        }
+
         if (walkable(arena, terrain, edits, startX, startZ) && walkable(arena, terrain, edits, goalX, goalZ)) {
+            int capacity = size * size;
+            int[] queueX = new int[capacity];
+            int[] queueZ = new int[capacity];
+            int head = 0;
+            int tail = 0;
             queueX[tail] = startX;
             queueZ[tail++] = startZ;
             visited[startX + radius][startZ + radius] = true;
@@ -91,27 +152,55 @@ final class NavigationScanner {
                 int x = queueX[head];
                 int z = queueZ[head++];
                 if (x == goalX && z == goalZ) {
-                    return true;
+                    boolean[][] path = new boolean[size][size];
+                    int px = goalX;
+                    int pz = goalZ;
+
+                    for (path[px + radius][pz + radius] = true;
+                        px != startX || pz != startZ;
+                        path[px + radius][pz + radius] = true
+                    ) {
+                        int nextX = parentX[px + radius][pz + radius];
+                        int nextZ = parentZ[px + radius][pz + radius];
+                        if (nextX == Integer.MIN_VALUE || nextZ == Integer.MIN_VALUE) {
+                            return null;
+                        }
+
+                        px = nextX;
+                        pz = nextZ;
+                    }
+
+                    return path;
                 }
 
                 for (int i = 0; i < 4; i++) {
                     int nx = x + dx[i];
                     int nz = z + dz[i];
-                    if (Math.abs(nx) <= radius
-                        && Math.abs(nz) <= radius
-                        && !visited[nx + radius][nz + radius]
-                        && Math.abs(terrain.heightAt(nx, nz) - terrain.heightAt(x, z)) <= 1
-                        && walkable(arena, terrain, edits, nx, nz)) {
-                        visited[nx + radius][nz + radius] = true;
-                        queueX[tail] = nx;
-                        queueZ[tail++] = nz;
+                    if (Math.abs(nx) <= radius && Math.abs(nz) <= radius) {
+                        int ix = nx + radius;
+                        int iz = nz + radius;
+                        if (!visited[ix][iz]
+                            && (
+                                blocked == null
+                                    || !blocked[ix][iz]
+                                    || nx == startX && nz == startZ
+                                    || nx == goalX && nz == goalZ
+                            )
+                            && Math.abs(terrain.heightAt(nx, nz) - terrain.heightAt(x, z)) <= 1
+                            && walkable(arena, terrain, edits, nx, nz)) {
+                            visited[ix][iz] = true;
+                            parentX[ix][iz] = x;
+                            parentZ[ix][iz] = z;
+                            queueX[tail] = nx;
+                            queueZ[tail++] = nz;
+                        }
                     }
                 }
             }
 
-            return false;
+            return null;
         } else {
-            return false;
+            return null;
         }
     }
 
