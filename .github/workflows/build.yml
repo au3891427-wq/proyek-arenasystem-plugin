@@ -36,5 +36,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: plugin-jar
-          path: "**/target/*.jar"
+          path: "ArenaSystem-0.2.9.7/target/*.jar"
           if-no-files-found: error
