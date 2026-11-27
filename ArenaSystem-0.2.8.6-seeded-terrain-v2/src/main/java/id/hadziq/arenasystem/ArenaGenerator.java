@@ -517,11 +517,26 @@ final class ArenaGenerator {
             buildGenericStructure(world, arena, terrain, edits,
                     pair[1][0], pair[1][1], template, wall);
 
+            boolean housesAccessible = isGenericHouseAccessible(world, arena, terrain, edits,
+                    pair[0][0], pair[0][1]) && isGenericHouseAccessible(world, arena, terrain, edits,
+                    pair[1][0], pair[1][1]);
             // Relic Rush may use the main lane as a deliberate chokepoint, but
             // never at the cost of disconnecting either team's altar route.
-            if (relic && !NavigationScanner.hasRelicRoutes(arena, terrain, edits, arena.spawnOffset)) {
-                edits.clear();
-                edits.putAll(beforePair);
+            boolean routesConnected = !relic
+                    || NavigationScanner.hasRelicRoutes(arena, terrain, edits, arena.spawnOffset);
+            if (!housesAccessible || !routesConnected) {
+                if (relic) {
+                    edits.clear();
+                    edits.putAll(beforePair);
+                } else {
+                    // TDM structures are added only after the route-clear scan;
+                    // failed door validation means this candidate is discarded.
+                    edits.entrySet().removeIf(entry ->
+                            (entry.getKey().x >= pair[0][0] - 3 && entry.getKey().x <= pair[0][0] + 3
+                                    && entry.getKey().z >= pair[0][1] - 3 && entry.getKey().z <= pair[0][1] + 3)
+                            || (entry.getKey().x >= pair[1][0] - 3 && entry.getKey().x <= pair[1][0] + 3
+                                    && entry.getKey().z >= pair[1][1] - 3 && entry.getKey().z <= pair[1][1] + 3));
+                }
                 continue;
             }
             placedPairs++;
@@ -562,6 +577,36 @@ final class ArenaGenerator {
             case 2 -> buildGenericTower(world, arena, terrain, edits, x, z, wall);
             default -> buildGenericRuin(world, arena, terrain, edits, x, z, wall);
         }
+    }
+
+    private static boolean isGenericHouseAccessible(World world, ArenaData arena, TerrainProfile terrain,
+                                                     Map<BlockPos, BlockEdit> edits, int cx, int cz) {
+        int doorY = terrain.heightAt(cx, cz + 3) - arena.centerY + 1;
+        BlockEdit lowerDoor = edits.get(new BlockPos(cx, doorY, cz + 3));
+        BlockEdit upperDoor = edits.get(new BlockPos(cx, doorY + 1, cz + 3));
+        if (lowerDoor == null || upperDoor == null
+                || !lowerDoor.material.name().endsWith("_DOOR")
+                || !upperDoor.material.name().endsWith("_DOOR")) return false;
+        return hasTwoBlockClearance(world, arena, terrain, edits, cx, cz + 2)
+                && hasTwoBlockClearance(world, arena, terrain, edits, cx, cz + 4);
+    }
+
+    private static boolean hasTwoBlockClearance(World world, ArenaData arena, TerrainProfile terrain,
+                                                 Map<BlockPos, BlockEdit> edits, int x, int z) {
+        int surfaceY = terrain.heightAt(x, z);
+        for (int dy = 1; dy <= 2; dy++) {
+            int relativeY = surfaceY + dy - arena.centerY;
+            BlockEdit planned = edits.get(new BlockPos(x, relativeY, z));
+            if (planned != null) {
+                if (planned.material.isAir() || !planned.material.isSolid()
+                        || planned.material.name().endsWith("_DOOR")) continue;
+                return false;
+            }
+            if (!world.getBlockAt(arena.centerX + x, surfaceY + dy, arena.centerZ + z).isPassable()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean isGenericRegionSafe(ArenaData arena, int x, int z,
