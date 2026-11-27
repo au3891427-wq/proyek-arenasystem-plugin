@@ -3,6 +3,7 @@ package id.hadziq.arenasystem;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 
 // $VF: Compiled from NavigationScanner.java
@@ -70,16 +71,30 @@ final class NavigationScanner {
             return false;
         }
 
+        boolean allRoutesValid = true;
         for (String team : RelicTeamLayout.teamNames(teamCount)) {
             int[] spawn = RelicTeamLayout.offset(team, teamCount, spawnOffset);
             int startX = spawn[0] - Integer.signum(spawn[0]) * 6;
             int startZ = spawn[1] - Integer.signum(spawn[1]) * 6;
-            if (!hasTwoVertexDisjointPaths(arena, terrain, edits, startX, startZ, altarAccess[0], altarAccess[1])) {
-                return false;
+            double spawnLength = Math.hypot(spawn[0], spawn[1]);
+            int paintedStartX = (int)Math.round(spawn[0] - spawn[0] / spawnLength * 7.0);
+            int paintedStartZ = (int)Math.round(spawn[1] - spawn[1] / spawnLength * 7.0);
+            int flow = countVertexDisjointPaths(
+                arena, terrain, edits, startX, startZ, altarAccess[0], altarAccess[1]
+            );
+            Bukkit.getLogger().info(
+                "[ArenaSystem][DEBUG] Relic Rush team=" + team
+                    + " validatorStart=(" + startX + "," + startZ + ")"
+                    + " paintedStart=(" + paintedStartX + "," + paintedStartZ + ")"
+                    + " altarAccess=(" + altarAccess[0] + "," + altarAccess[1] + ")"
+                    + " flow=" + flow
+            );
+            if (flow < 2) {
+                allRoutesValid = false;
             }
         }
 
-        return true;
+        return allRoutesValid;
     }
 
     /**
@@ -139,7 +154,7 @@ final class NavigationScanner {
      * jika dan hanya jika max-flow dari start ke goal pada graf ini mencapai 2. Dihitung
      * dengan algoritma Dinic, dihentikan lebih awal begitu flow mencapai 2.
      */
-    private static boolean hasTwoVertexDisjointPaths(
+    private static int countVertexDisjointPaths(
         ArenaData arena,
         TerrainProfile terrain,
         Map<BlockPos, BlockEdit> edits,
@@ -151,15 +166,15 @@ final class NavigationScanner {
         int radius = terrain.radius();
         if (Math.abs(startX) > radius || Math.abs(startZ) > radius
             || Math.abs(goalX) > radius || Math.abs(goalZ) > radius) {
-            return false;
+            return -1;
         }
 
         if (!walkable(arena, terrain, edits, startX, startZ) || !walkable(arena, terrain, edits, goalX, goalZ)) {
-            return false;
+            return -1;
         }
 
         if (startX == goalX && startZ == goalZ) {
-            return true;
+            return 2;
         }
 
         int size = radius * 2 + 1;
@@ -210,7 +225,7 @@ final class NavigationScanner {
         graph.addEdge(source, nodeIn(startIndex), 2);
         graph.addEdge(nodeOut(goalIndex), sink, 2);
 
-        return graph.maxFlow(source, sink, 2) >= 2;
+        return graph.maxFlow(source, sink, 2);
     }
 
     private static int cellIndex(int x, int z, int radius, int size) {
