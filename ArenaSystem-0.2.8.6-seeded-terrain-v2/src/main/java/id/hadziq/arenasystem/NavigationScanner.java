@@ -32,10 +32,6 @@ final class NavigationScanner {
             int x = edit.position.x;
             int z = edit.position.z;
             if (Math.abs(x) > radius || Math.abs(z) > radius) continue;
-            if (edit.position.y != terrain.heightAt(x, z) - 0 /* replaced below */) {
-                // BlockEdit Y is arena-center-relative, so path membership is
-                // identified by its known path material, not by absolute Y.
-            }
             if (PATH_MATERIALS.contains(edit.material)) {
                 path[x + radius][z + radius] = true;
             }
