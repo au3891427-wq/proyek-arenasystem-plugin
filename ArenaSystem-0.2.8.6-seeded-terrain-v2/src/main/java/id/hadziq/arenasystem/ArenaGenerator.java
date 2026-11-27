@@ -565,8 +565,13 @@ final class ArenaGenerator {
         int absZ = Math.abs(z);
         if (absX <= 8 || absZ <= 8) return false;
         if (relic) {
-            int sideLane = (int) Math.round(18.0D * arena.radius / 40.0D);
-            if (Math.abs(absX - sideLane) <= 5 || Math.abs(absZ - sideLane) <= 5) return false;
+            int scaleSideLane = (int) Math.round(18.0D * arena.radius / 40.0D);
+            int crossLaneInner = (int) Math.round(16.0D * arena.radius / 40.0D);
+            int crossLaneOuter = (int) Math.round(29.0D * arena.radius / 40.0D);
+            if (Math.abs(absX - scaleSideLane) <= 5 || Math.abs(absZ - scaleSideLane) <= 5) return false;
+            // Keep the entire 7x7 footprint clear of the two cross-lanes.
+            if (Math.abs(absX - crossLaneInner) <= 4
+                    || Math.abs(absX - crossLaneOuter) <= 4) return false;
         }
         for (int[] spawn : SeededTerrainBlender.anchors(arena.spawnOffset, teamCount)) {
             int dx = Math.max(0, Math.abs(x - spawn[0]) - 7);
