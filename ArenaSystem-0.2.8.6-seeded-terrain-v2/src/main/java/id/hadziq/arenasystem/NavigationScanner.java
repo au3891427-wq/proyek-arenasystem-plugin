@@ -60,8 +60,8 @@ final class NavigationScanner {
      */
     static boolean hasRelicRoutes(ArenaData arena, TerrainProfile terrain, Map<BlockPos, BlockEdit> edits,
                                   int spawnOffset) {
-        return connected(arena, terrain, edits, -spawnOffset, 0, 7, 0)
-                && connected(arena, terrain, edits, spawnOffset, 0, 7, 0);
+        return connected(arena, terrain, edits, -spawnOffset + 6, 0, 7, 0)
+                && connected(arena, terrain, edits, spawnOffset - 6, 0, 7, 0);
     }
 
     private static boolean connected(ArenaData arena, TerrainProfile terrain, Map<BlockPos, BlockEdit> edits,
