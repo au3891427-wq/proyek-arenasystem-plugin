@@ -14,6 +14,8 @@ public final class TestRelicTeamLayout {
         verifyTwoTeamLayoutUnchanged();
         verifyFourTeamLayoutUnchanged();
         verifyTacticalRouteNetworks();
+        verifySanctumGateAlignment();
+        verifyAltarGateAccess();
         verifyRouteInputBounds();
         System.out.println("Relic Rush team layout and connected route geometry tests passed.");
     }
@@ -153,6 +155,44 @@ public final class TestRelicTeamLayout {
     private static void assertInsideArena(RelicRushRouteLayout.Point point, int maxCoordinate) {
         if (Math.abs(point.x()) > maxCoordinate || Math.abs(point.z()) > maxCoordinate) {
             throw new AssertionError("route point outside safety margin: " + point);
+        }
+    }
+
+    private static void verifySanctumGateAlignment() {
+        assertPoint("2-team RED gate", RelicTeamLayout.sanctumGate("red", 2, 48), -42, 0);
+        assertPoint("2-team BLUE gate", RelicTeamLayout.sanctumGate("blue", 2, 48), 42, 0);
+        assertPoint("3-team RED gate", RelicTeamLayout.sanctumGate("red", 3, 48), -37, 21);
+        assertPoint("3-team BLUE gate", RelicTeamLayout.sanctumGate("blue", 3, 48), 37, 21);
+        assertPoint("3-team GREEN gate", RelicTeamLayout.sanctumGate("green", 3, 48), 0, -42);
+
+        for (int teamCount = 2; teamCount <= 4; teamCount++) {
+            Set<Long> cells = rasterize(RelicRushRouteLayout.segments(teamCount, 48, 56));
+            for (String team : RelicTeamLayout.teamNames(teamCount)) {
+                int[] gate = RelicTeamLayout.sanctumGate(team, teamCount, 48);
+                if (!cells.contains(key(gate[0], gate[1]))) {
+                    throw new AssertionError(
+                        teamCount + "-team " + team + " sanctum gate does not connect to its route"
+                    );
+                }
+            }
+        }
+    }
+
+    private static void verifyAltarGateAccess() {
+        List<RelicRushRouteLayout.Point> gates = RelicRushRouteLayout.altarAccessPoints();
+        if (gates.size() != 4) {
+            throw new AssertionError("altar must expose exactly four approach gates");
+        }
+        Set<Long> cells = rasterize(RelicRushRouteLayout.segments(2, 48, 56));
+        Set<Long> multiTeamCells = rasterize(RelicRushRouteLayout.segments(3, 48, 56));
+        for (RelicRushRouteLayout.Point gate : gates) {
+            if (Math.max(Math.abs(gate.x()), Math.abs(gate.z())) != 7) {
+                throw new AssertionError("altar access gate must sit immediately outside the 13x13 altar");
+            }
+            if (!cells.contains(key(gate.x(), gate.z()))
+                || !multiTeamCells.contains(key(gate.x(), gate.z()))) {
+                throw new AssertionError("main route network does not reach altar gate " + gate);
+            }
         }
     }
 
