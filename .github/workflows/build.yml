@@ -151,6 +151,17 @@ jobs:
           echo "Paper API: $PAPER_API_VERSION"
           echo "version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Verify Relic Rush team layout geometry
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEST_CLASSES="$RUNNER_TEMP/relic-layout-tests"
+          mkdir -p "$TEST_CLASSES"
+          javac -encoding UTF-8 -d "$TEST_CLASSES" \
+            "$PLUGIN_PROJECT_DIR/arenasystem/RelicTeamLayout.java" \
+            "$PLUGIN_PROJECT_DIR/tools/TestRelicTeamLayout.java"
+          java -cp "$TEST_CLASSES" id.hadziq.arenasystem.TestRelicTeamLayout
+
       - name: Build with Maven
         run: mvn -B -ntp -f "$PLUGIN_PROJECT_DIR/pom.xml" clean verify
 
