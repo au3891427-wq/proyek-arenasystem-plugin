@@ -39,23 +39,15 @@ jobs:
           set -euo pipefail
 
           POM_PATH="$PLUGIN_PROJECT_DIR/pom.xml"
-          SOURCE_PATH="$PLUGIN_PROJECT_DIR/arenasystem/ArenaGenerator.java"
-          PLUGIN_YML="$PLUGIN_PROJECT_DIR/resources/plugin.yml"
-
           test -f "$POM_PATH" || { echo "::error::Maven POM not found: $POM_PATH"; exit 1; }
-          test -f "$SOURCE_PATH" || { echo "::error::ArenaGenerator source not found: $SOURCE_PATH"; exit 1; }
-          test -f "$PLUGIN_YML" || { echo "::error::plugin.yml not found: $PLUGIN_YML"; exit 1; }
-
-          grep -q 'clearRelicLaneHeadroom' "$SOURCE_PATH" || {
-            echo "::error::Selected ArenaGenerator is missing the 3-team Relic Rush route fix."
-            exit 1
-          }
 
           readarray -t PROJECT_METADATA < <(python3 - "$POM_PATH" <<'PY'
           import sys
+          from pathlib import Path
           import xml.etree.ElementTree as ET
 
-          root = ET.parse(sys.argv[1]).getroot()
+          pom_path = Path(sys.argv[1]).resolve()
+          root = ET.parse(pom_path).getroot()
           ns = {"m": "http://maven.apache.org/POM/4.0.0"}
           version = root.findtext("m:version", namespaces=ns, default="")
           java_release = root.findtext("m:properties/m:maven.compiler.release", namespaces=ns, default="")
@@ -66,15 +58,42 @@ jobs:
                   paper_version = dependency.findtext("m:version", namespaces=ns, default="")
                   break
 
+          basedir = pom_path.parent
+          source_dir = root.findtext("m:build/m:sourceDirectory", namespaces=ns, default="src/main/java")
+          source_dir = source_dir.replace("${project.basedir}", str(basedir))
+          resource_nodes = root.findall("m:build/m:resources/m:resource", ns)
+          resource_dirs = [
+              node.findtext("m:directory", namespaces=ns, default="src/main/resources")
+              for node in resource_nodes
+          ] or ["src/main/resources"]
+          resource_dir = resource_dirs[0].replace("${project.basedir}", str(basedir))
+
           print(version)
           print(java_release)
           print(paper_version)
+          print(source_dir)
+          print(resource_dir)
           PY
           )
 
           PROJECT_VERSION="${PROJECT_METADATA[0]}"
           JAVA_RELEASE="${PROJECT_METADATA[1]}"
           PAPER_API_VERSION="${PROJECT_METADATA[2]}"
+          SOURCE_DIRECTORY="${PROJECT_METADATA[3]}"
+          RESOURCE_DIRECTORY="${PROJECT_METADATA[4]}"
+          SOURCE_PATH="$SOURCE_DIRECTORY/ArenaGenerator.java"
+          PLUGIN_YML="$RESOURCE_DIRECTORY/plugin.yml"
+
+          test -d "$SOURCE_DIRECTORY" || { echo "::error::Maven source directory not found: $SOURCE_DIRECTORY"; exit 1; }
+          test -d "$RESOURCE_DIRECTORY" || { echo "::error::Maven resource directory not found: $RESOURCE_DIRECTORY"; exit 1; }
+          test -f "$SOURCE_PATH" || { echo "::error::ArenaGenerator source not found: $SOURCE_PATH"; exit 1; }
+          test -f "$PLUGIN_YML" || { echo "::error::plugin.yml not found: $PLUGIN_YML"; exit 1; }
+
+          grep -q 'clearRelicLaneHeadroom' "$SOURCE_PATH" || {
+            echo "::error::Selected ArenaGenerator is missing the 3-team Relic Rush route fix."
+            exit 1
+          }
+
           PLUGIN_VERSION="$(sed -nE "s/^version:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?[[:space:]]*$/\1/p" "$PLUGIN_YML" | head -n 1)"
           API_VERSION="$(sed -nE "s/^api-version:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?[[:space:]]*$/\1/p" "$PLUGIN_YML" | head -n 1)"
 
