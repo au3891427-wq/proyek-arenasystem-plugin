@@ -7,6 +7,12 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+# Keep this pointed at the canonical server-plugin Maven project.
+# When the project folder changes, update this single setting instead of
+# searching for the first pom.xml in the repository.
+env:
+  PLUGIN_PROJECT_DIR: arenaSystem_Bukkit-0.2.9.8
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -27,15 +33,117 @@ jobs:
         with:
           maven-version: 3.10.2
 
-      - name: Build with Maven
+      - name: Validate selected Maven project
+        id: project
+        shell: bash
         run: |
-          POM_PATH=$(find . -maxdepth 3 -name "pom.xml" | head -n 1)
-          echo "Found POM at: $POM_PATH"
-          mvn -f "$POM_PATH" -B -q package
+          set -euo pipefail
+
+          POM_PATH="$PLUGIN_PROJECT_DIR/pom.xml"
+          SOURCE_PATH="$PLUGIN_PROJECT_DIR/arenasystem/ArenaGenerator.java"
+          PLUGIN_YML="$PLUGIN_PROJECT_DIR/resources/plugin.yml"
+
+          test -f "$POM_PATH" || { echo "::error::Maven POM not found: $POM_PATH"; exit 1; }
+          test -f "$SOURCE_PATH" || { echo "::error::ArenaGenerator source not found: $SOURCE_PATH"; exit 1; }
+          test -f "$PLUGIN_YML" || { echo "::error::plugin.yml not found: $PLUGIN_YML"; exit 1; }
+
+          grep -q 'clearRelicLaneHeadroom' "$SOURCE_PATH" || {
+            echo "::error::Selected ArenaGenerator is missing the 3-team Relic Rush route fix."
+            exit 1
+          }
+
+          readarray -t PROJECT_METADATA < <(python3 - "$POM_PATH" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse(sys.argv[1]).getroot()
+          ns = {"m": "http://maven.apache.org/POM/4.0.0"}
+          version = root.findtext("m:version", namespaces=ns, default="")
+          java_release = root.findtext("m:properties/m:maven.compiler.release", namespaces=ns, default="")
+          paper_version = ""
+          for dependency in root.findall(".//m:dependency", ns):
+              artifact = dependency.findtext("m:artifactId", namespaces=ns, default="")
+              if artifact == "paper-api":
+                  paper_version = dependency.findtext("m:version", namespaces=ns, default="")
+                  break
+
+          print(version)
+          print(java_release)
+          print(paper_version)
+          PY
+          )
+
+          PROJECT_VERSION="${PROJECT_METADATA[0]}"
+          JAVA_RELEASE="${PROJECT_METADATA[1]}"
+          PAPER_API_VERSION="${PROJECT_METADATA[2]}"
+          PLUGIN_VERSION="$(sed -nE "s/^version:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?[[:space:]]*$/\1/p" "$PLUGIN_YML" | head -n 1)"
+          API_VERSION="$(sed -nE "s/^api-version:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?[[:space:]]*$/\1/p" "$PLUGIN_YML" | head -n 1)"
+
+          test -n "$PROJECT_VERSION" || { echo "::error::Could not read project version from $POM_PATH"; exit 1; }
+          test "$JAVA_RELEASE" = "25" || { echo "::error::Expected Java release 25, got '$JAVA_RELEASE'."; exit 1; }
+          test "$PAPER_API_VERSION" = "[26.3.build,)" || {
+            echo "::error::Expected Paper API [26.3.build,), got '$PAPER_API_VERSION'."
+            exit 1
+          }
+          test "$PLUGIN_VERSION" = "$PROJECT_VERSION" || {
+            echo "::error::plugin.yml version '$PLUGIN_VERSION' does not match Maven version '$PROJECT_VERSION'."
+            exit 1
+          }
+          test "$API_VERSION" = "26.3" || {
+            echo "::error::Expected plugin.yml api-version 26.3, got '$API_VERSION'."
+            exit 1
+          }
+
+          echo "Selected project: $PLUGIN_PROJECT_DIR"
+          echo "Plugin version: $PROJECT_VERSION"
+          echo "Java release: $JAVA_RELEASE"
+          echo "Paper API: $PAPER_API_VERSION"
+          echo "version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build with Maven
+        run: mvn -B -ntp -f "$PLUGIN_PROJECT_DIR/pom.xml" clean verify
+
+      - name: Verify built plugin JAR
+        id: verify
+        shell: bash
+        env:
+          PROJECT_VERSION: ${{ steps.project.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          JAR_PATH="$PLUGIN_PROJECT_DIR/target/arenaSystem_Bukkit-$PROJECT_VERSION.jar"
+          test -f "$JAR_PATH" || {
+            echo "::error::Expected output JAR not found: $JAR_PATH"
+            exit 1
+          }
+
+          javap -classpath "$JAR_PATH" -p id.hadziq.arenasystem.ArenaGenerator \
+            > "$RUNNER_TEMP/ArenaGenerator.javap"
+          grep -q 'clearRelicLaneHeadroom' "$RUNNER_TEMP/ArenaGenerator.javap" || {
+            echo "::error::Compiled JAR does not contain clearRelicLaneHeadroom."
+            exit 1
+          }
+
+          unzip -p "$JAR_PATH" plugin.yml > "$RUNNER_TEMP/plugin.yml"
+          JAR_PLUGIN_VERSION="$(sed -nE "s/^version:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?[[:space:]]*$/\1/p" "$RUNNER_TEMP/plugin.yml" | head -n 1)"
+          JAR_API_VERSION="$(sed -nE "s/^api-version:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?[[:space:]]*$/\1/p" "$RUNNER_TEMP/plugin.yml" | head -n 1)"
+
+          test "$JAR_PLUGIN_VERSION" = "$PROJECT_VERSION" || {
+            echo "::error::JAR plugin.yml version '$JAR_PLUGIN_VERSION' does not match '$PROJECT_VERSION'."
+            exit 1
+          }
+          test "$JAR_API_VERSION" = "26.3" || {
+            echo "::error::JAR plugin.yml api-version is '$JAR_API_VERSION', expected 26.3."
+            exit 1
+          }
+
+          echo "Verified JAR: $JAR_PATH"
+          echo "version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "jar_path=$JAR_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Upload JAR Artifact
         uses: actions/upload-artifact@v4
         with:
           name: plugin-jar
-          path: "**/target/*.jar"
+          path: ${{ steps.verify.outputs.jar_path }}
           if-no-files-found: error
