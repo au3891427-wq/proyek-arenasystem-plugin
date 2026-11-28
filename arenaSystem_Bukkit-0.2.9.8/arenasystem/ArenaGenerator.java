@@ -738,13 +738,42 @@ private static void clearRelicSegmentHeadroom(
         World world, ArenaData arena, TerrainProfile terrain, Map<BlockPos, BlockEdit> edits
     ) {
         int altarY = terrain.heightAt(0, 0);
-        if (altarY < world.getMinHeight() + 1 || altarY + 4 >= world.getMaxHeight()) {
+        if (altarY <= world.getMinHeight() || altarY + 4 >= world.getMaxHeight()) {
             throw new IllegalStateException("ketinggian fondasi altar berada di luar batas world.");
         }
 
         for (int x = -6; x <= 6; x++) {
             for (int z = -6; z <= 6; z++) {
                 int surfaceY = terrain.heightAt(x, z);
+                int supportY = findRelicAltarSupportY(
+                    world, arena.centerX + x, arena.centerZ + z, altarY
+                );
+                if (supportY == Integer.MIN_VALUE) {
+                    throw new IllegalStateException(
+                        "tidak ditemukan blok tanah solid untuk menopang fondasi altar pada kolom "
+                            + (arena.centerX + x) + "," + (arena.centerZ + z)
+                    );
+                }
+
+                int clearTopY = Math.max(surfaceY, altarY + 4);
+                if (clearTopY >= world.getMaxHeight()) {
+                    throw new IllegalStateException(
+                        "ruang altar melewati batas tinggi world pada kolom "
+                            + (arena.centerX + x) + "," + (arena.centerZ + z)
+                    );
+                }
+
+                // Validate the complete support-to-headroom column before scheduling any edits.
+                for (int y = supportY; y <= clearTopY; y++) {
+                    Block block = world.getBlockAt(arena.centerX + x, y, arena.centerZ + z);
+                    if (block.getState() instanceof TileState) {
+                        throw new IllegalStateException(
+                            "fondasi altar akan menyentuh block entity pada "
+                                + (arena.centerX + x) + "," + y + "," + (arena.centerZ + z)
+                        );
+                    }
+                }
+
                 int distance = Math.max(Math.abs(x), Math.abs(z));
                 Material floor = distance == 6
                     ? Material.CHISELED_SANDSTONE
@@ -753,33 +782,16 @@ private static void clearRelicSegmentHeadroom(
                     floor = Material.POLISHED_BLACKSTONE_BRICKS;
                 }
 
-                Block altarBlock = world.getBlockAt(arena.centerX + x, altarY, arena.centerZ + z);
-                if (altarBlock.getState() instanceof TileState) {
-                    throw new IllegalStateException(
-                        "fondasi altar akan menyentuh block entity pada "
-                            + (arena.centerX + x) + "," + altarY + "," + (arena.centerZ + z)
-                    );
+                // Bridge every gap below the altar floor down to the first solid terrain block.
+                for (int y = supportY + 1; y < altarY; y++) {
+                    add(edits, x, y - arena.centerY, z, Material.CUT_SANDSTONE);
                 }
 
-                int lowY = Math.min(surfaceY, altarY);
-                int highY = Math.max(surfaceY, altarY);
-                for (int y = lowY + 1; y <= Math.max(highY, altarY + 4); y++) {
-                    Block block = world.getBlockAt(arena.centerX + x, y, arena.centerZ + z);
-                    if (block.getState() instanceof TileState) {
-                        throw new IllegalStateException(
-                            "fondasi altar akan menyentuh block entity pada "
-                                + (arena.centerX + x) + "," + y + "," + (arena.centerZ + z)
-                        );
-                    }
-
-                    if (y < altarY) {
-                        add(edits, x, y - arena.centerY, z, Material.CUT_SANDSTONE);
-                    } else if (y > altarY) {
-                        add(edits, x, y - arena.centerY, z, Material.AIR);
-                    }
-                }
-
+                // Level the floor and clear terrain/obstructions above it.
                 add(edits, x, altarY - arena.centerY, z, floor);
+                for (int y = altarY + 1; y <= clearTopY; y++) {
+                    add(edits, x, y - arena.centerY, z, Material.AIR);
+                }
             }
         }
 
@@ -801,6 +813,35 @@ private static void clearRelicSegmentHeadroom(
                 );
             }
         }
+    }
+
+    private static int findRelicAltarSupportY(World world, int blockX, int blockZ, int altarY) {
+        for (int y = altarY - 1; y >= world.getMinHeight(); y--) {
+            Block block = world.getBlockAt(blockX, y, blockZ);
+            if (block.getState() instanceof TileState) {
+                throw new IllegalStateException(
+                    "pencarian penopang altar menemukan block entity pada "
+                        + blockX + "," + y + "," + blockZ
+                );
+            }
+
+            Material material = block.getType();
+            String name = material.name();
+            boolean foliage = name.endsWith("_LEAVES")
+                || name.endsWith("_LOG")
+                || name.endsWith("_WOOD")
+                || name.equals("AZALEA")
+                || name.equals("FLOWERING_AZALEA");
+            if (material.isSolid()
+                && !material.isAir()
+                && !isLiquid(material)
+                && !isCombatVegetation(material)
+                && !foliage) {
+                return y;
+            }
+        }
+
+        return Integer.MIN_VALUE;
     }
 
     private static void buildRelicOutpost(

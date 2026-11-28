@@ -107,6 +107,11 @@ jobs:
             exit 1
           }
 
+          grep -q 'findRelicAltarSupportY' "$SOURCE_PATH" || {
+            echo "::error::Relic Rush altar is missing per-column solid-ground support detection."
+            exit 1
+          }
+
           PLUGIN_VERSION="$(sed -nE "s/^version:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?[[:space:]]*$/\1/p" "$PLUGIN_YML" | head -n 1)"
           API_VERSION="$(sed -nE "s/^api-version:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?[[:space:]]*$/\1/p" "$PLUGIN_YML" | head -n 1)"
 
@@ -162,6 +167,11 @@ jobs:
           javap -classpath "$JAR_PATH" -p -c id.hadziq.arenasystem.ArenaGenerator             > "$RUNNER_TEMP/ArenaGenerator.bytecode"
           grep -q 'Material.CUT_SANDSTONE' "$RUNNER_TEMP/ArenaGenerator.bytecode" || {
             echo "::error::Compiled JAR does not contain the altar foundation fill."
+            exit 1
+          }
+
+          grep -q 'findRelicAltarSupportY' "$RUNNER_TEMP/ArenaGenerator.bytecode" || {
+            echo "::error::Compiled JAR does not contain the altar solid-ground support detector."
             exit 1
           }
 
