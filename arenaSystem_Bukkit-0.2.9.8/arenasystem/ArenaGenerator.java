@@ -737,32 +737,61 @@ private static void clearRelicSegmentHeadroom(
     private static void buildRelicShrine(
         World world, ArenaData arena, TerrainProfile terrain, Map<BlockPos, BlockEdit> edits
     ) {
+        int altarY = terrain.heightAt(0, 0);
+        if (altarY < world.getMinHeight() + 1 || altarY + 4 >= world.getMaxHeight()) {
+            throw new IllegalStateException("ketinggian fondasi altar berada di luar batas world.");
+        }
+
         for (int x = -6; x <= 6; x++) {
             for (int z = -6; z <= 6; z++) {
+                int surfaceY = terrain.heightAt(x, z);
                 int distance = Math.max(Math.abs(x), Math.abs(z));
-                if (distance <= 6) {
-                    Material floor = distance == 6
-                        ? Material.CHISELED_SANDSTONE
-                        : (distance >= 4 ? Material.CUT_SANDSTONE : Material.SMOOTH_SANDSTONE);
-                    if (Math.abs(x) == 2 || Math.abs(z) == 2) {
-                        floor = Material.POLISHED_BLACKSTONE_BRICKS;
+                Material floor = distance == 6
+                    ? Material.CHISELED_SANDSTONE
+                    : (distance >= 4 ? Material.CUT_SANDSTONE : Material.SMOOTH_SANDSTONE);
+                if (Math.abs(x) == 2 || Math.abs(z) == 2) {
+                    floor = Material.POLISHED_BLACKSTONE_BRICKS;
+                }
+
+                int lowY = Math.min(surfaceY, altarY);
+                int highY = Math.max(surfaceY, altarY);
+                for (int y = lowY + 1; y <= Math.max(highY, altarY + 4); y++) {
+                    Block block = world.getBlockAt(arena.centerX + x, y, arena.centerZ + z);
+                    if (block.getState() instanceof TileState) {
+                        throw new IllegalStateException(
+                            "fondasi altar akan menyentuh block entity pada "
+                                + (arena.centerX + x) + "," + y + "," + (arena.centerZ + z)
+                        );
                     }
 
-                    addSurface(world, arena, terrain, edits, x, z, floor);
+                    if (y < altarY) {
+                        add(edits, x, y - arena.centerY, z, Material.CUT_SANDSTONE);
+                    } else if (y > altarY) {
+                        add(edits, x, y - arena.centerY, z, Material.AIR);
+                    }
                 }
+
+                add(edits, x, altarY - arena.centerY, z, floor);
             }
         }
 
-        int groundY = terrain.heightAt(0, 0) - arena.centerY;
-        addAir(world, arena, edits, 0, groundY + 1, 0, Material.POLISHED_BLACKSTONE_BRICKS);
-        addAir(world, arena, edits, 0, groundY + 2, 0, Material.CHISELED_SANDSTONE);
-        addAir(world, arena, edits, 0, groundY + 3, 0, Material.GOLD_BLOCK);
-        addAir(world, arena, edits, 0, groundY + 4, 0, Material.SEA_LANTERN);
+        int groundY = altarY - arena.centerY;
+        add(edits, 0, groundY + 1, 0, Material.POLISHED_BLACKSTONE_BRICKS);
+        add(edits, 0, groundY + 2, 0, Material.CHISELED_SANDSTONE);
+        add(edits, 0, groundY + 3, 0, Material.GOLD_BLOCK);
+        add(edits, 0, groundY + 4, 0, Material.SEA_LANTERN);
 
         for (int[] point : new int[][]{{-5, -5}, {-5, 5}, {5, -5}, {5, 5}}) {
-            buildTerrainPillar(
-                world, arena, terrain, edits, point[0], point[1], 3, Material.PURPUR_BLOCK, Material.AMETHYST_BLOCK
-            );
+            int pillarBaseY = altarY - arena.centerY;
+            for (int height = 1; height <= 3; height++) {
+                add(
+                    edits,
+                    point[0],
+                    pillarBaseY + height,
+                    point[1],
+                    height == 3 ? Material.AMETHYST_BLOCK : Material.PURPUR_BLOCK
+                );
+            }
         }
     }
 
