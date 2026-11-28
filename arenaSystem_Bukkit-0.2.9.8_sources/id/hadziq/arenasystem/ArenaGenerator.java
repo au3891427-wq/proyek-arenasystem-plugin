@@ -37,6 +37,9 @@ final class ArenaGenerator {
         }
 
         buildGenericStructures(world, arena, terrain, edits, seed, radius, teamCount);
+        if ("relic_rush".equalsIgnoreCase(arena.mode) && teamCount >= 3) {
+            clearRelicLaneHeadroom(world, arena, terrain, edits, teamCount);
+        }
         if ("relic_rush".equalsIgnoreCase(arena.mode)
             && !NavigationScanner.hasRelicRoutes(arena, terrain, edits, arena.spawnOffset, teamCount)) {
             throw new IllegalStateException(
@@ -410,6 +413,79 @@ final class ArenaGenerator {
                 paintRelicLane(world, arena, terrain, edits, startX, startZ, sideStartX, sideStartZ);
                 paintRelicLane(world, arena, terrain, edits, sideStartX, sideStartZ, sideEndX, sideEndZ);
                 paintRelicLane(world, arena, terrain, edits, sideEndX, sideEndZ, 0, 0);
+            }
+        }
+    }
+
+    private static void clearRelicLaneHeadroom(
+        World world, ArenaData arena, TerrainProfile terrain, Map<BlockPos, BlockEdit> edits, int teamCount
+    ) {
+        for (String team : RelicTeamLayout.teamNames(teamCount)) {
+            int[] spawn = RelicTeamLayout.offset(team, teamCount, arena.spawnOffset);
+            double length = Math.hypot(spawn[0], spawn[1]);
+            double inwardX = -spawn[0] / length;
+            double inwardZ = -spawn[1] / length;
+            double sideX = -inwardZ;
+            double sideZ = inwardX;
+            int startX = (int)Math.round(spawn[0] + inwardX * 7.0);
+            int startZ = (int)Math.round(spawn[1] + inwardZ * 7.0);
+            clearRelicSegmentHeadroom(world, arena, terrain, edits, startX, startZ, 0, 0);
+
+            for (int side : new int[]{-1, 1}) {
+                int sideStartX = (int)Math.round(startX + sideX * side * 7.0);
+                int sideStartZ = (int)Math.round(startZ + sideZ * side * 7.0);
+                int sideEndX = (int)Math.round(sideX * side * 7.0);
+                int sideEndZ = (int)Math.round(sideZ * side * 7.0);
+                clearRelicSegmentHeadroom(
+                    world, arena, terrain, edits, startX, startZ, sideStartX, sideStartZ
+                );
+                clearRelicSegmentHeadroom(
+                    world, arena, terrain, edits, sideStartX, sideStartZ, sideEndX, sideEndZ
+                );
+                clearRelicSegmentHeadroom(
+                    world, arena, terrain, edits, sideEndX, sideEndZ, 0, 0
+                );
+            }
+        }
+    }
+
+    private static void clearRelicSegmentHeadroom(
+        World world,
+        ArenaData arena,
+        TerrainProfile terrain,
+        Map<BlockPos, BlockEdit> edits,
+        int startX,
+        int startZ,
+        int endX,
+        int endZ
+    ) {
+        int steps = Math.max(Math.abs(endX - startX), Math.abs(endZ - startZ));
+        steps = Math.max(1, steps);
+
+        for (int step = 0; step <= steps; step++) {
+            int x = (int)Math.round(startX + (endX - startX) * ((double)step / steps));
+            int z = (int)Math.round(startZ + (endZ - startZ) * ((double)step / steps));
+
+            for (int dx = -2; dx <= 2; dx++) {
+                for (int dz = -2; dz <= 2; dz++) {
+                    int laneX = x + dx;
+                    int laneZ = z + dz;
+                    int surfaceY = terrain.heightAt(laneX, laneZ);
+                    for (int dy = 1; dy <= 2; dy++) {
+                        Block block = world.getBlockAt(
+                            arena.centerX + laneX, surfaceY + dy, arena.centerZ + laneZ
+                        );
+                        if (block.getState() instanceof TileState) {
+                            throw new IllegalStateException(
+                                "jalur Relic Rush akan menyentuh block entity pada kolom "
+                                    + (arena.centerX + laneX)
+                                    + ","
+                                    + (arena.centerZ + laneZ)
+                            );
+                        }
+                        add(edits, laneX, surfaceY + dy - arena.centerY, laneZ, Material.AIR);
+                    }
+                }
             }
         }
     }
