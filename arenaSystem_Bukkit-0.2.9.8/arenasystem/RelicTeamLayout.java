@@ -3,7 +3,6 @@ package id.hadziq.arenasystem;
 import java.util.List;
 import java.util.Locale;
 
-// $VF: Compiled from RelicTeamLayout.java
 final class RelicTeamLayout {
     private static final List<String> TEAM_NAMES = List.of("red", "blue", "green", "yellow");
 
@@ -16,7 +15,19 @@ final class RelicTeamLayout {
     }
 
     static int[] offset(String team, int teamCount, int distance) {
-        return switch (team == null ? "" : team.toLowerCase(Locale.ROOT)) {
+        String safeTeam = team == null ? "" : team.toLowerCase(Locale.ROOT);
+        if (teamCount == 3) {
+            int halfWidth = (int)Math.round(distance * Math.sqrt(3.0) / 2.0);
+            int halfHeight = (int)Math.round(distance / 2.0);
+            return switch (safeTeam) {
+                case "red" -> new int[]{-halfWidth, halfHeight};
+                case "blue" -> new int[]{halfWidth, halfHeight};
+                case "green" -> new int[]{0, -distance};
+                default -> new int[]{0, 0};
+            };
+        }
+
+        return switch (safeTeam) {
             case "red" -> new int[]{-distance, 0};
             case "blue" -> new int[]{distance, 0};
             case "green" -> new int[]{0, -distance};

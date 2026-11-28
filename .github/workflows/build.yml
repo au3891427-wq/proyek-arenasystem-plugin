@@ -159,6 +159,7 @@ jobs:
           mkdir -p "$TEST_CLASSES"
           javac -encoding UTF-8 -d "$TEST_CLASSES" \
             "$PLUGIN_PROJECT_DIR/arenasystem/RelicTeamLayout.java" \
+            "$PLUGIN_PROJECT_DIR/arenasystem/RelicRushRouteLayout.java" \
             "$PLUGIN_PROJECT_DIR/tools/TestRelicTeamLayout.java"
           java -cp "$TEST_CLASSES" id.hadziq.arenasystem.TestRelicTeamLayout
 
