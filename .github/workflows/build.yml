@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 25
         uses: actions/setup-java@v4
@@ -29,27 +31,41 @@ jobs:
       - name: Build with Maven (Latest POM)
         run: |
           POM_PATH=$(python3 -c '
-          import glob, re, os
+          import glob, re, os, subprocess, sys
 
-          poms = [p for p in glob.glob("**/pom.xml", recursive=True) if p.count(os.sep) <= 3]
+          poms = glob.glob("**/pom.xml", recursive=True)
           if not poms:
-              exit(1)
+              sys.exit(1)
 
-          def get_version(path):
+          def get_info(path):
               try:
                   content = open(path, encoding="utf-8").read()
-                  # Hapus blok <parent> agar mengambil <version> milik project utama
                   clean = re.sub(r"<parent>.*?</parent>", "", content, flags=re.DOTALL)
                   m = re.search(r"<version>\s*([^<]+?)\s*</version>", clean)
                   ver_str = m.group(1) if m else "0.0.0"
                   nums = tuple(int(x) for x in re.findall(r"\d+", ver_str))
-                  # Prioritas: 1. Angka versi tertinggi, 2. Waktu file terakhir diubah
-                  return (nums, os.path.getmtime(path))
               except Exception:
-                  return ((0,), os.path.getmtime(path))
+                  ver_str = "0.0.0"
+                  nums = (0,)
 
-          latest_pom = max(poms, key=get_version)
-          print(latest_pom)
+              # Ambil waktu commit git terakhir untuk file pom.xml ini
+              ts_str = subprocess.check_output(
+                  ["git", "log", "-1", "--format=%ct", "--", path]
+              ).decode().strip()
+              git_ts = int(ts_str) if ts_str.isdigit() else 0
+              return (nums, git_ts, ver_str)
+
+          ranked = []
+          for p in poms:
+              nums, git_ts, ver_str = get_info(p)
+              ranked.append((nums, git_ts, p, ver_str))
+
+          ranked.sort(reverse=True)
+          print("=== Daftar pom.xml ditemukan ===", file=sys.stderr)
+          for nums, git_ts, p, ver_str in ranked:
+              print(f"- {p} | versi: {ver_str} | commit_ts: {git_ts}", file=sys.stderr)
+
+          print(ranked[0][2])
           ')
 
           if [ -z "$POM_PATH" ]; then
@@ -57,7 +73,7 @@ jobs:
             exit 1
           fi
 
-          echo "Memilih POM versi terbaru di: $POM_PATH"
+          echo "Memilih POM terbaru: $POM_PATH"
           mvn -f "$POM_PATH" -B -q package
 
       - name: Upload JAR Artifact
