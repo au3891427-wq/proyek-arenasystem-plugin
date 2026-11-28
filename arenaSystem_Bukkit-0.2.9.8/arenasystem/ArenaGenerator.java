@@ -30,16 +30,17 @@ final class ArenaGenerator {
         Map<BlockPos, BlockEdit> edits = new LinkedHashMap<>();
         normalizeSurface(world, arena, originalTerrain, terrain, edits, radius);
         queueCombatVegetationCleanup(world, arena, terrain, edits, radius);
-        if ("relic_rush".equalsIgnoreCase(arena.mode)) {
+        boolean relicRush = "relic_rush".equalsIgnoreCase(arena.mode);
+        if (relicRush) {
             buildRelicRush(world, arena, terrain, edits, seed, radius, teamCount);
+            // Paint routes before generic props so candidate placement can avoid the full network.
+            buildRelicTacticalRoutes(world, arena, terrain, edits, teamCount);
         } else {
             buildTeamDeathmatch(world, arena, terrain, edits, seed, radius, teamCount);
         }
 
         buildGenericStructures(world, arena, terrain, edits, seed, radius, teamCount);
-        if ("relic_rush".equalsIgnoreCase(arena.mode)) {
-            // Paint the complete tactical network after props, then clear its two-block headroom.
-            buildRelicTacticalRoutes(world, arena, terrain, edits, teamCount);
+        if (relicRush) {
             clearRelicSpawnHeadroom(arena, terrain, edits, teamCount);
             clearRelicLaneHeadroom(world, arena, terrain, edits, teamCount);
 
@@ -373,7 +374,7 @@ final class ArenaGenerator {
             for (int dx = -halfWidth; dx <= halfWidth; dx++) {
                 for (int dz = -halfWidth; dz <= halfWidth; dz++) {
                     int edge = Math.max(Math.abs(dx), Math.abs(dz));
-                    addSurface(
+                    addRelicRouteSurface(
                         world,
                         arena,
                         terrain,
@@ -384,6 +385,31 @@ final class ArenaGenerator {
                     );
                 }
             }
+        }
+    }
+
+    private static void addRelicRouteSurface(
+        World world,
+        ArenaData arena,
+        TerrainProfile terrain,
+        Map<BlockPos, BlockEdit> edits,
+        int x,
+        int z,
+        Material material
+    ) {
+        int surfaceY = terrain.heightAt(x, z);
+        Block surface = world.getBlockAt(arena.centerX + x, surfaceY, arena.centerZ + z);
+        if (surface.getState() instanceof TileState) {
+            return;
+        }
+
+        BlockPos position = new BlockPos(x, surfaceY - arena.centerY, z);
+        BlockEdit planned = edits.get(position);
+        boolean solidGround = planned != null
+            ? planned.material.isSolid() || isLiquid(planned.material)
+            : surface.getType().isSolid() || surface.isLiquid();
+        if (solidGround) {
+            add(edits, x, surfaceY - arena.centerY, z, material);
         }
     }
 
@@ -1008,7 +1034,13 @@ private static void clearRelicSegmentHeadroom(
 
         for (int x = min; x <= max; x++) {
             for (int z = min; z <= max; z++) {
-                if (relic || !navigation.isNearMainPath(x, z, 4) && !navigation.isNearMainPath(-x, -z, 4)) {
+                boolean nearRoute = navigation.isNearMainPath(x, z, 4)
+                    || navigation.isNearMainPath(-x, -z, 4);
+                if (relic) {
+                    nearRoute |= navigation.isNearMainPath(-x, z, 4)
+                        || navigation.isNearMainPath(x, -z, 4);
+                }
+                if (!nearRoute) {
                     candidates.add(new int[]{x, z, random.nextBoolean() ? 1 : 0});
                 }
             }

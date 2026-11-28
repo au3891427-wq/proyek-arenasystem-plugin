@@ -1,6 +1,9 @@
 package id.hadziq.arenasystem;
 
+import java.util.ArrayDeque;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public final class TestRelicTeamLayout {
     private TestRelicTeamLayout() {
@@ -12,7 +15,7 @@ public final class TestRelicTeamLayout {
         verifyFourTeamLayoutUnchanged();
         verifyTacticalRouteNetworks();
         verifyRouteInputBounds();
-        System.out.println("Relic Rush team layout and route geometry tests passed.");
+        System.out.println("Relic Rush team layout and connected route geometry tests passed.");
     }
 
     private static void verifyThreeTeamTriangle() {
@@ -46,6 +49,7 @@ public final class TestRelicTeamLayout {
         for (int teamCount = 2; teamCount <= 4; teamCount++) {
             List<RelicRushRouteLayout.Segment> segments =
                 RelicRushRouteLayout.segments(teamCount, 48, 56);
+            Set<Long> cells = rasterize(segments);
             int main = 0;
             int rotation = 0;
             int contestation = 0;
@@ -57,14 +61,8 @@ public final class TestRelicTeamLayout {
                 if (segment.width() != 3) {
                     throw new AssertionError("all tactical corridors must be exactly 3 blocks wide");
                 }
-                if (Math.abs(segment.start().x()) > 54 || Math.abs(segment.start().z()) > 54
-                    || Math.abs(segment.end().x()) > 54 || Math.abs(segment.end().z()) > 54) {
-                    throw new AssertionError("route segment exceeds the arena safety margin");
-                }
-                if (Math.hypot(segment.start().x(), segment.start().z()) < 7.0
-                    || Math.hypot(segment.end().x(), segment.end().z()) < 7.0) {
-                    throw new AssertionError("route segment enters the altar exclusion zone");
-                }
+                assertInsideArena(segment.start(), 54);
+                assertInsideArena(segment.end(), 54);
                 switch (segment.type()) {
                     case MAIN -> main++;
                     case ROTATION -> rotation++;
@@ -78,12 +76,84 @@ public final class TestRelicTeamLayout {
                         + main + "/" + rotation + "/" + contestation
                 );
             }
+            if (cells.stream().anyMatch(TestRelicTeamLayout::insideAltarFootprint)) {
+                throw new AssertionError(teamCount + "-team corridor overlaps the altar's 13x13 footprint");
+            }
+            assertFullyConnected(teamCount, cells);
         }
 
         List<RelicRushRouteLayout.Segment> twoTeam = RelicRushRouteLayout.segments(2, 48, 56);
         assertHasEndpoint("RED sanctum exit", twoTeam, RelicRushRouteLayout.Type.MAIN, -42, 0);
         assertHasEndpoint("BLUE sanctum exit", twoTeam, RelicRushRouteLayout.Type.MAIN, 42, 0);
         assertHasEndpoint("RED altar-side gate", twoTeam, RelicRushRouteLayout.Type.MAIN, -12, 0);
+    }
+
+    private static Set<Long> rasterize(List<RelicRushRouteLayout.Segment> segments) {
+        Set<Long> cells = new HashSet<>();
+        for (RelicRushRouteLayout.Segment segment : segments) {
+            RelicRushRouteLayout.Point start = segment.start();
+            RelicRushRouteLayout.Point end = segment.end();
+            int steps = Math.max(Math.abs(end.x() - start.x()), Math.abs(end.z() - start.z()));
+            steps = Math.max(1, steps);
+            for (int step = 0; step <= steps; step++) {
+                int x = (int)Math.round(start.x() + (end.x() - start.x()) * ((double)step / steps));
+                int z = (int)Math.round(start.z() + (end.z() - start.z()) * ((double)step / steps));
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        cells.add(key(x + dx, z + dz));
+                    }
+                }
+            }
+        }
+        return cells;
+    }
+
+    private static void assertFullyConnected(int teamCount, Set<Long> cells) {
+        if (cells.isEmpty()) {
+            throw new AssertionError(teamCount + "-team route graph is empty");
+        }
+
+        Set<Long> visited = new HashSet<>();
+        ArrayDeque<Long> queue = new ArrayDeque<>();
+        long first = cells.iterator().next();
+        visited.add(first);
+        queue.add(first);
+        int[] dx = {1, -1, 0, 0};
+        int[] dz = {0, 0, 1, -1};
+
+        while (!queue.isEmpty()) {
+            long current = queue.removeFirst();
+            int x = (int)(current >> 32);
+            int z = (int)current;
+            for (int i = 0; i < 4; i++) {
+                long next = key(x + dx[i], z + dz[i]);
+                if (cells.contains(next) && visited.add(next)) {
+                    queue.addLast(next);
+                }
+            }
+        }
+
+        if (visited.size() != cells.size()) {
+            throw new AssertionError(
+                teamCount + "-team route graph is disconnected: " + visited.size() + "/" + cells.size()
+            );
+        }
+    }
+
+    private static long key(int x, int z) {
+        return ((long)x << 32) ^ (z & 0xffffffffL);
+    }
+
+    private static boolean insideAltarFootprint(long cell) {
+        int x = (int)(cell >> 32);
+        int z = (int)cell;
+        return Math.abs(x) <= 6 && Math.abs(z) <= 6;
+    }
+
+    private static void assertInsideArena(RelicRushRouteLayout.Point point, int maxCoordinate) {
+        if (Math.abs(point.x()) > maxCoordinate || Math.abs(point.z()) > maxCoordinate) {
+            throw new AssertionError("route point outside safety margin: " + point);
+        }
     }
 
     private static void verifyRouteInputBounds() {

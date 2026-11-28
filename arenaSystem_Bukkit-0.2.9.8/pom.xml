@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>id.hadziq</groupId>
     <artifactId>arena-system</artifactId>
-    <version>0.2.10.3</version>
+    <version>0.2.10.4</version>
     <packaging>jar</packaging>
     <name>ArenaSystem</name>
     <description>Hybrid arena match plugin with client-driven Assassin off-hand input support.</description>
