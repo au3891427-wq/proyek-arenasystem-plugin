@@ -16,8 +16,6 @@ final class RelicTeamLayout {
     }
 
     static int[] offset(String team, int teamCount, int distance) {
-        int safeCount = Math.max(2, Math.min(4, teamCount));
-
         return switch (team == null ? "" : team.toLowerCase(Locale.ROOT)) {
             case "red" -> new int[]{-distance, 0};
             case "blue" -> new int[]{distance, 0};
