@@ -112,6 +112,21 @@ jobs:
             exit 1
           }
 
+          python3 - "$SOURCE_PATH" <<'PY'
+          import sys
+          from pathlib import Path
+
+          source = Path(sys.argv[1]).read_text(encoding="utf-8")
+          start = source.index("static List<BlockEdit> createPlan(")
+          end = source.index("private static void queueCombatVegetationCleanup", start)
+          plan = source[start:end]
+          lane = plan.find("clearRelicLaneHeadroom(world, arena, terrain, edits, teamCount);")
+          shrine = plan.find("buildRelicShrine(world, arena, terrain, edits);")
+          if lane < 0 or shrine < 0 or lane > shrine:
+              raise SystemExit("Relic altar must be built after the 3/4-team route headroom cleanup.")
+          print("Verified: 3/4-team route headroom cleanup runs before the altar is built.")
+          PY
+
           PLUGIN_VERSION="$(sed -nE "s/^version:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?[[:space:]]*$/\1/p" "$PLUGIN_YML" | head -n 1)"
           API_VERSION="$(sed -nE "s/^api-version:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?[[:space:]]*$/\1/p" "$PLUGIN_YML" | head -n 1)"
 

@@ -42,6 +42,9 @@ final class ArenaGenerator {
             if (teamCount >= 3) {
                 clearRelicLaneHeadroom(world, arena, terrain, edits, teamCount);
             }
+
+            // Build the shrine last so team-route headroom edits cannot erase altar blocks.
+            buildRelicShrine(world, arena, terrain, edits);
         }
         if ("relic_rush".equalsIgnoreCase(arena.mode)
             && !NavigationScanner.hasRelicRoutes(arena, terrain, edits, arena.spawnOffset, teamCount)) {
@@ -277,7 +280,6 @@ final class ArenaGenerator {
             );
         }
 
-        buildRelicShrine(world, arena, terrain, edits);
         Random outpostLayout = SeededArenaLayout.relicOutpostRandom(seed);
         if (teamCount <= 2) {
             int nearX = (int)Math.round(19.0 * scale);
