@@ -98,6 +98,15 @@ jobs:
             exit 1
           }
 
+          grep -q 'int altarY = terrain.heightAt(0, 0)' "$SOURCE_PATH" || {
+            echo "::error::Relic Rush altar is missing its shared foundation elevation."
+            exit 1
+          }
+          grep -q 'Material.CUT_SANDSTONE' "$SOURCE_PATH" || {
+            echo "::error::Relic Rush altar is missing solid foundation fill."
+            exit 1
+          }
+
           PLUGIN_VERSION="$(sed -nE "s/^version:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?[[:space:]]*$/\1/p" "$PLUGIN_YML" | head -n 1)"
           API_VERSION="$(sed -nE "s/^api-version:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?[[:space:]]*$/\1/p" "$PLUGIN_YML" | head -n 1)"
 
@@ -147,6 +156,12 @@ jobs:
           }
           grep -q 'clearRelicSpawnHeadroom' "$RUNNER_TEMP/ArenaGenerator.javap" || {
             echo "::error::Compiled JAR does not contain clearRelicSpawnHeadroom."
+            exit 1
+          }
+
+          javap -classpath "$JAR_PATH" -p -c id.hadziq.arenasystem.ArenaGenerator             > "$RUNNER_TEMP/ArenaGenerator.bytecode"
+          grep -q 'Material.CUT_SANDSTONE' "$RUNNER_TEMP/ArenaGenerator.bytecode" || {
+            echo "::error::Compiled JAR does not contain the altar foundation fill."
             exit 1
           }
 
