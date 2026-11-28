@@ -30,18 +30,22 @@ final class ArenaGenerator {
         Map<BlockPos, BlockEdit> edits = new LinkedHashMap<>();
         normalizeSurface(world, arena, originalTerrain, terrain, edits, radius);
         queueCombatVegetationCleanup(world, arena, terrain, edits, radius);
-        if ("relic_rush".equalsIgnoreCase(arena.mode)) {
+        boolean relicRush = "relic_rush".equalsIgnoreCase(arena.mode);
+        if (relicRush) {
             buildRelicRush(world, arena, terrain, edits, seed, radius, teamCount);
+            // Paint routes before generic props so candidate placement can avoid the full network.
+            buildRelicTacticalRoutes(world, arena, terrain, edits, teamCount);
         } else {
             buildTeamDeathmatch(world, arena, terrain, edits, seed, radius, teamCount);
         }
 
         buildGenericStructures(world, arena, terrain, edits, seed, radius, teamCount);
-        if ("relic_rush".equalsIgnoreCase(arena.mode)) {
+        if (relicRush) {
             clearRelicSpawnHeadroom(arena, terrain, edits, teamCount);
-            if (teamCount >= 3) {
-                clearRelicLaneHeadroom(world, arena, terrain, edits, teamCount);
-            }
+            clearRelicLaneHeadroom(world, arena, terrain, edits, teamCount);
+
+            // Build the shrine last so route cleanup cannot erase altar blocks.
+            buildRelicShrine(world, arena, terrain, edits);
         }
         if ("relic_rush".equalsIgnoreCase(arena.mode)
             && !NavigationScanner.hasRelicRoutes(arena, terrain, edits, arena.spawnOffset, teamCount)) {
@@ -207,61 +211,9 @@ final class ArenaGenerator {
         int teamCount
     ) {
         double scale = radius / 40.0;
-        int laneEnd = radius - 14;
         int sideLaneOffset = (int)Math.round(18.0 * scale);
         int crossLaneOuter = (int)Math.round(29.0 * scale);
         int crossLaneInner = (int)Math.round(16.0 * scale);
-        int laneHalfWidth = Math.max(2, (int)Math.round(2.0 * scale));
-        if (teamCount <= 2) {
-            for (int x = -laneEnd; x <= laneEnd; x++) {
-                for (int z = -laneHalfWidth; z <= laneHalfWidth; z++) {
-                    addSurface(
-                        world,
-                        arena,
-                        terrain,
-                        edits,
-                        x,
-                        z,
-                        Math.abs(z) == laneHalfWidth ? Material.CUT_SANDSTONE : Material.SMOOTH_SANDSTONE
-                    );
-                }
-
-                for (int side : new int[]{-sideLaneOffset, sideLaneOffset}) {
-                    for (int dz = -laneHalfWidth; dz <= laneHalfWidth; dz++) {
-                        addSurface(
-                            world,
-                            arena,
-                            terrain,
-                            edits,
-                            x,
-                            side + dz,
-                            Math.abs(dz) == laneHalfWidth ? Material.SANDSTONE : Material.CUT_SANDSTONE
-                        );
-                    }
-                }
-            }
-
-            int[] crossLanes = new int[]{-crossLaneOuter, -crossLaneInner, 0, crossLaneInner, crossLaneOuter};
-
-            for (int x : crossLanes) {
-                for (int z = -sideLaneOffset; z <= sideLaneOffset; z++) {
-                    for (int dx = -1; dx <= 1; dx++) {
-                        addSurface(
-                            world,
-                            arena,
-                            terrain,
-                            edits,
-                            x + dx,
-                            z,
-                            Math.abs(dx) == 1 ? Material.CUT_SANDSTONE : Material.SMOOTH_SANDSTONE
-                        );
-                    }
-                }
-            }
-        } else {
-            buildRelicTeamRoutes(world, arena, terrain, edits, teamCount);
-        }
-
         for (String team : RelicTeamLayout.teamNames(teamCount)) {
             int[] spawn = RelicTeamLayout.offset(team, teamCount, arena.spawnOffset);
             buildRelicSanctum(
@@ -271,13 +223,10 @@ final class ArenaGenerator {
                 edits,
                 spawn[0],
                 spawn[1],
-                relicTeamMaterial(team),
-                -Integer.signum(spawn[0]),
-                -Integer.signum(spawn[1])
+                relicTeamMaterial(team)
             );
         }
 
-        buildRelicShrine(world, arena, terrain, edits);
         Random outpostLayout = SeededArenaLayout.relicOutpostRandom(seed);
         if (teamCount <= 2) {
             int nearX = (int)Math.round(19.0 * scale);
@@ -394,29 +343,71 @@ final class ArenaGenerator {
         };
     }
 
-    private static void buildRelicTeamRoutes(
+        private static void buildRelicTacticalRoutes(
         World world, ArenaData arena, TerrainProfile terrain, Map<BlockPos, BlockEdit> edits, int teamCount
     ) {
-        for (String team : RelicTeamLayout.teamNames(teamCount)) {
-            int[] spawn = RelicTeamLayout.offset(team, teamCount, arena.spawnOffset);
-            double length = Math.hypot(spawn[0], spawn[1]);
-            double inwardX = -spawn[0] / length;
-            double inwardZ = -spawn[1] / length;
-            double sideX = -inwardZ;
-            double sideZ = inwardX;
-            int startX = (int)Math.round(spawn[0] + inwardX * 7.0);
-            int startZ = (int)Math.round(spawn[1] + inwardZ * 7.0);
-            paintRelicLane(world, arena, terrain, edits, startX, startZ, 0, 0);
+        for (RelicRushRouteLayout.Segment segment
+            : RelicRushRouteLayout.segments(teamCount, arena.spawnOffset, terrain.radius())) {
+            paintRelicSegment(world, arena, terrain, edits, segment);
+        }
+    }
 
-            for (int side : new int[]{-1, 1}) {
-                int sideStartX = (int)Math.round(startX + sideX * side * 7.0);
-                int sideStartZ = (int)Math.round(startZ + sideZ * side * 7.0);
-                int sideEndX = (int)Math.round(sideX * side * 7.0);
-                int sideEndZ = (int)Math.round(sideZ * side * 7.0);
-                paintRelicLane(world, arena, terrain, edits, startX, startZ, sideStartX, sideStartZ);
-                paintRelicLane(world, arena, terrain, edits, sideStartX, sideStartZ, sideEndX, sideEndZ);
-                paintRelicLane(world, arena, terrain, edits, sideEndX, sideEndZ, 0, 0);
+    private static void paintRelicSegment(
+        World world,
+        ArenaData arena,
+        TerrainProfile terrain,
+        Map<BlockPos, BlockEdit> edits,
+        RelicRushRouteLayout.Segment segment
+    ) {
+        RelicRushRouteLayout.Point start = segment.start();
+        RelicRushRouteLayout.Point end = segment.end();
+        int steps = Math.max(Math.abs(end.x() - start.x()), Math.abs(end.z() - start.z()));
+        steps = Math.max(1, steps);
+        int halfWidth = segment.width() / 2;
+
+        for (int step = 0; step <= steps; step++) {
+            int x = (int)Math.round(start.x() + (end.x() - start.x()) * ((double)step / steps));
+            int z = (int)Math.round(start.z() + (end.z() - start.z()) * ((double)step / steps));
+
+            for (int dx = -halfWidth; dx <= halfWidth; dx++) {
+                for (int dz = -halfWidth; dz <= halfWidth; dz++) {
+                    int edge = Math.max(Math.abs(dx), Math.abs(dz));
+                    addRelicRouteSurface(
+                        world,
+                        arena,
+                        terrain,
+                        edits,
+                        x + dx,
+                        z + dz,
+                        edge == halfWidth ? Material.CUT_SANDSTONE : Material.SMOOTH_SANDSTONE
+                    );
+                }
             }
+        }
+    }
+
+    private static void addRelicRouteSurface(
+        World world,
+        ArenaData arena,
+        TerrainProfile terrain,
+        Map<BlockPos, BlockEdit> edits,
+        int x,
+        int z,
+        Material material
+    ) {
+        int surfaceY = terrain.heightAt(x, z);
+        Block surface = world.getBlockAt(arena.centerX + x, surfaceY, arena.centerZ + z);
+        if (surface.getState() instanceof TileState) {
+            return;
+        }
+
+        BlockPos position = new BlockPos(x, surfaceY - arena.centerY, z);
+        BlockEdit planned = edits.get(position);
+        boolean solidGround = planned != null
+            ? planned.material.isSolid() || isLiquid(planned.material)
+            : surface.getType().isSolid() || surface.isLiquid();
+        if (solidGround) {
+            add(edits, x, surfaceY - arena.centerY, z, material);
         }
     }
 
@@ -438,35 +429,16 @@ private static void clearRelicSpawnHeadroom(
         }
     }
 
-private static void clearRelicLaneHeadroom(
+    private static void clearRelicLaneHeadroom(
         World world, ArenaData arena, TerrainProfile terrain, Map<BlockPos, BlockEdit> edits, int teamCount
     ) {
-        for (String team : RelicTeamLayout.teamNames(teamCount)) {
-            int[] spawn = RelicTeamLayout.offset(team, teamCount, arena.spawnOffset);
-            double length = Math.hypot(spawn[0], spawn[1]);
-            double inwardX = -spawn[0] / length;
-            double inwardZ = -spawn[1] / length;
-            double sideX = -inwardZ;
-            double sideZ = inwardX;
-            int startX = (int)Math.round(spawn[0] + inwardX * 7.0);
-            int startZ = (int)Math.round(spawn[1] + inwardZ * 7.0);
-            clearRelicSegmentHeadroom(world, arena, terrain, edits, startX, startZ, 0, 0);
-
-            for (int side : new int[]{-1, 1}) {
-                int sideStartX = (int)Math.round(startX + sideX * side * 7.0);
-                int sideStartZ = (int)Math.round(startZ + sideZ * side * 7.0);
-                int sideEndX = (int)Math.round(sideX * side * 7.0);
-                int sideEndZ = (int)Math.round(sideZ * side * 7.0);
-                clearRelicSegmentHeadroom(
-                    world, arena, terrain, edits, startX, startZ, sideStartX, sideStartZ
-                );
-                clearRelicSegmentHeadroom(
-                    world, arena, terrain, edits, sideStartX, sideStartZ, sideEndX, sideEndZ
-                );
-                clearRelicSegmentHeadroom(
-                    world, arena, terrain, edits, sideEndX, sideEndZ, 0, 0
-                );
-            }
+        for (RelicRushRouteLayout.Segment segment
+            : RelicRushRouteLayout.segments(teamCount, arena.spawnOffset, terrain.radius())) {
+            RelicRushRouteLayout.Point start = segment.start();
+            RelicRushRouteLayout.Point end = segment.end();
+            clearRelicSegmentHeadroom(
+                world, arena, terrain, edits, start.x(), start.z(), end.x(), end.z()
+            );
         }
     }
 
@@ -653,9 +625,7 @@ private static void clearRelicSegmentHeadroom(
         Map<BlockPos, BlockEdit> edits,
         int centerX,
         int centerZ,
-        Material teamMaterial,
-        int inwardX,
-        int inwardZ
+        Material teamMaterial
     ) {
         for (int dx = -6; dx <= 6; dx++) {
             for (int dz = -6; dz <= 6; dz++) {
@@ -689,10 +659,16 @@ private static void clearRelicSegmentHeadroom(
             }
         }
 
-        int perpendicularX = -inwardZ;
-        int perpendicularZ = inwardX;
-        int gateX = centerX + inwardX * 6;
-        int gateZ = centerZ + inwardZ * 6;
+        double spawnLength = Math.hypot(centerX, centerZ);
+        if (spawnLength == 0.0) {
+            throw new IllegalArgumentException("posisi sanctum tidak boleh berada di pusat arena.");
+        }
+        double inwardX = -centerX / spawnLength;
+        double inwardZ = -centerZ / spawnLength;
+        double perpendicularX = -inwardZ;
+        double perpendicularZ = inwardX;
+        int gateX = centerX + (int)Math.round(inwardX * 6.0);
+        int gateZ = centerZ + (int)Math.round(inwardZ * 6.0);
 
         for (int side : new int[]{-3, 3}) {
             buildTerrainPillar(
@@ -700,8 +676,8 @@ private static void clearRelicSegmentHeadroom(
                 arena,
                 terrain,
                 edits,
-                gateX + perpendicularX * side,
-                gateZ + perpendicularZ * side,
+                gateX + (int)Math.round(perpendicularX * side),
+                gateZ + (int)Math.round(perpendicularZ * side),
                 4,
                 teamMaterial,
                 Material.SMOOTH_SANDSTONE
@@ -715,9 +691,9 @@ private static void clearRelicSegmentHeadroom(
                 world,
                 arena,
                 edits,
-                gateX + perpendicularX * width,
+                gateX + (int)Math.round(perpendicularX * width),
                 gateY + 4,
-                gateZ + perpendicularZ * width,
+                gateZ + (int)Math.round(perpendicularZ * width),
                 Material.CHISELED_SANDSTONE
             );
         }
@@ -737,33 +713,111 @@ private static void clearRelicSegmentHeadroom(
     private static void buildRelicShrine(
         World world, ArenaData arena, TerrainProfile terrain, Map<BlockPos, BlockEdit> edits
     ) {
+        int altarY = terrain.heightAt(0, 0);
+        if (altarY <= world.getMinHeight() || altarY + 4 >= world.getMaxHeight()) {
+            throw new IllegalStateException("ketinggian fondasi altar berada di luar batas world.");
+        }
+
         for (int x = -6; x <= 6; x++) {
             for (int z = -6; z <= 6; z++) {
-                int distance = Math.max(Math.abs(x), Math.abs(z));
-                if (distance <= 6) {
-                    Material floor = distance == 6
-                        ? Material.CHISELED_SANDSTONE
-                        : (distance >= 4 ? Material.CUT_SANDSTONE : Material.SMOOTH_SANDSTONE);
-                    if (Math.abs(x) == 2 || Math.abs(z) == 2) {
-                        floor = Material.POLISHED_BLACKSTONE_BRICKS;
-                    }
+                int surfaceY = terrain.heightAt(x, z);
+                int supportY = findRelicAltarSupportY(
+                    world, arena.centerX + x, arena.centerZ + z, altarY
+                );
+                if (supportY == Integer.MIN_VALUE) {
+                    throw new IllegalStateException(
+                        "tidak ditemukan blok tanah solid untuk menopang fondasi altar pada kolom "
+                            + (arena.centerX + x) + "," + (arena.centerZ + z)
+                    );
+                }
 
-                    addSurface(world, arena, terrain, edits, x, z, floor);
+                int clearTopY = Math.max(surfaceY, altarY + 4);
+                if (clearTopY >= world.getMaxHeight()) {
+                    throw new IllegalStateException(
+                        "ruang altar melewati batas tinggi world pada kolom "
+                            + (arena.centerX + x) + "," + (arena.centerZ + z)
+                    );
+                }
+
+                // Validate the complete support-to-headroom column before scheduling any edits.
+                for (int y = supportY; y <= clearTopY; y++) {
+                    Block block = world.getBlockAt(arena.centerX + x, y, arena.centerZ + z);
+                    if (block.getState() instanceof TileState) {
+                        throw new IllegalStateException(
+                            "fondasi altar akan menyentuh block entity pada "
+                                + (arena.centerX + x) + "," + y + "," + (arena.centerZ + z)
+                        );
+                    }
+                }
+
+                int distance = Math.max(Math.abs(x), Math.abs(z));
+                Material floor = distance == 6
+                    ? Material.CHISELED_SANDSTONE
+                    : (distance >= 4 ? Material.CUT_SANDSTONE : Material.SMOOTH_SANDSTONE);
+                if (Math.abs(x) == 2 || Math.abs(z) == 2) {
+                    floor = Material.POLISHED_BLACKSTONE_BRICKS;
+                }
+
+                // Bridge every gap below the altar floor down to the first solid terrain block.
+                for (int y = supportY + 1; y < altarY; y++) {
+                    add(edits, x, y - arena.centerY, z, Material.CUT_SANDSTONE);
+                }
+
+                // Level the floor and clear terrain/obstructions above it.
+                add(edits, x, altarY - arena.centerY, z, floor);
+                for (int y = altarY + 1; y <= clearTopY; y++) {
+                    add(edits, x, y - arena.centerY, z, Material.AIR);
                 }
             }
         }
 
-        int groundY = terrain.heightAt(0, 0) - arena.centerY;
-        addAir(world, arena, edits, 0, groundY + 1, 0, Material.POLISHED_BLACKSTONE_BRICKS);
-        addAir(world, arena, edits, 0, groundY + 2, 0, Material.CHISELED_SANDSTONE);
-        addAir(world, arena, edits, 0, groundY + 3, 0, Material.GOLD_BLOCK);
-        addAir(world, arena, edits, 0, groundY + 4, 0, Material.SEA_LANTERN);
+        int groundY = altarY - arena.centerY;
+        add(edits, 0, groundY + 1, 0, Material.POLISHED_BLACKSTONE_BRICKS);
+        add(edits, 0, groundY + 2, 0, Material.CHISELED_SANDSTONE);
+        add(edits, 0, groundY + 3, 0, Material.GOLD_BLOCK);
+        add(edits, 0, groundY + 4, 0, Material.SEA_LANTERN);
 
         for (int[] point : new int[][]{{-5, -5}, {-5, 5}, {5, -5}, {5, 5}}) {
-            buildTerrainPillar(
-                world, arena, terrain, edits, point[0], point[1], 3, Material.PURPUR_BLOCK, Material.AMETHYST_BLOCK
-            );
+            int pillarBaseY = altarY - arena.centerY;
+            for (int height = 1; height <= 3; height++) {
+                add(
+                    edits,
+                    point[0],
+                    pillarBaseY + height,
+                    point[1],
+                    height == 3 ? Material.AMETHYST_BLOCK : Material.PURPUR_BLOCK
+                );
+            }
         }
+    }
+
+    private static int findRelicAltarSupportY(World world, int blockX, int blockZ, int altarY) {
+        for (int y = altarY - 1; y >= world.getMinHeight(); y--) {
+            Block block = world.getBlockAt(blockX, y, blockZ);
+            if (block.getState() instanceof TileState) {
+                throw new IllegalStateException(
+                    "pencarian penopang altar menemukan block entity pada "
+                        + blockX + "," + y + "," + blockZ
+                );
+            }
+
+            Material material = block.getType();
+            String name = material.name();
+            boolean foliage = name.endsWith("_LEAVES")
+                || name.endsWith("_LOG")
+                || name.endsWith("_WOOD")
+                || name.equals("AZALEA")
+                || name.equals("FLOWERING_AZALEA");
+            if (material.isSolid()
+                && !material.isAir()
+                && !isLiquid(material)
+                && !isCombatVegetation(material)
+                && !foliage) {
+                return y;
+            }
+        }
+
+        return Integer.MIN_VALUE;
     }
 
     private static void buildRelicOutpost(
@@ -978,7 +1032,13 @@ private static void clearRelicSegmentHeadroom(
 
         for (int x = min; x <= max; x++) {
             for (int z = min; z <= max; z++) {
-                if (relic || !navigation.isNearMainPath(x, z, 4) && !navigation.isNearMainPath(-x, -z, 4)) {
+                boolean nearRoute = navigation.isNearMainPath(x, z, 4)
+                    || navigation.isNearMainPath(-x, -z, 4);
+                if (relic) {
+                    nearRoute |= navigation.isNearMainPath(-x, z, 4)
+                        || navigation.isNearMainPath(x, -z, 4);
+                }
+                if (!nearRoute) {
                     candidates.add(new int[]{x, z, random.nextBoolean() ? 1 : 0});
                 }
             }
