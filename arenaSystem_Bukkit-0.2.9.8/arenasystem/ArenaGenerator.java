@@ -753,6 +753,14 @@ private static void clearRelicSegmentHeadroom(
                     floor = Material.POLISHED_BLACKSTONE_BRICKS;
                 }
 
+                Block altarBlock = world.getBlockAt(arena.centerX + x, altarY, arena.centerZ + z);
+                if (altarBlock.getState() instanceof TileState) {
+                    throw new IllegalStateException(
+                        "fondasi altar akan menyentuh block entity pada "
+                            + (arena.centerX + x) + "," + altarY + "," + (arena.centerZ + z)
+                    );
+                }
+
                 int lowY = Math.min(surfaceY, altarY);
                 int highY = Math.max(surfaceY, altarY);
                 for (int y = lowY + 1; y <= Math.max(highY, altarY + 4); y++) {
