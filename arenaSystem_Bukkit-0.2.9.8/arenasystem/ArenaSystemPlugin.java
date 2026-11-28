@@ -889,15 +889,16 @@ public final class ArenaSystemPlugin extends JavaPlugin implements Listener {
 
                         int redY = profile.heightAt(-spawnOffset, 0);
                         int blueY = profile.heightAt(spawnOffset, 0);
-                        if (!ArenaSystemPlugin.this.hasBuildClearanceAfterNormalization(
-                                world, centerX - spawnOffset, redY, centerZ, originalProfile.heightAt(-spawnOffset, 0)
-                            )
-                            || !ArenaSystemPlugin.this.hasBuildClearanceAfterNormalization(
-                                world, centerX + spawnOffset, blueY, centerZ, originalProfile.heightAt(spawnOffset, 0)
-                            )
-                            || !ArenaSystemPlugin.this.hasObjectiveClearanceAfterNormalization(
-                                world, centerX, profile.heightAt(0, 0), centerZ, originalProfile.heightAt(0, 0)
-                            )) {
+                        if (!"relic_rush".equalsIgnoreCase(mode)
+                            && (!ArenaSystemPlugin.this.hasBuildClearanceAfterNormalization(
+                                    world, centerX - spawnOffset, redY, centerZ, originalProfile.heightAt(-spawnOffset, 0)
+                                )
+                                || !ArenaSystemPlugin.this.hasBuildClearanceAfterNormalization(
+                                    world, centerX + spawnOffset, blueY, centerZ, originalProfile.heightAt(spawnOffset, 0)
+                                )
+                                || !ArenaSystemPlugin.this.hasObjectiveClearanceAfterNormalization(
+                                    world, centerX, profile.heightAt(0, 0), centerZ, originalProfile.heightAt(0, 0)
+                                ))) {
                             ArenaSystemPlugin.this.abortBeforeBuild(
                                 sender,
                                 name,

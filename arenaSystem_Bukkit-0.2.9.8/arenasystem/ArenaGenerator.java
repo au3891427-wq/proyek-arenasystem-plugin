@@ -37,8 +37,11 @@ final class ArenaGenerator {
         }
 
         buildGenericStructures(world, arena, terrain, edits, seed, radius, teamCount);
-        if ("relic_rush".equalsIgnoreCase(arena.mode) && teamCount >= 3) {
-            clearRelicLaneHeadroom(world, arena, terrain, edits, teamCount);
+        if ("relic_rush".equalsIgnoreCase(arena.mode)) {
+            clearRelicSpawnHeadroom(arena, terrain, edits, teamCount);
+            if (teamCount >= 3) {
+                clearRelicLaneHeadroom(world, arena, terrain, edits, teamCount);
+            }
         }
         if ("relic_rush".equalsIgnoreCase(arena.mode)
             && !NavigationScanner.hasRelicRoutes(arena, terrain, edits, arena.spawnOffset, teamCount)) {
@@ -413,6 +416,24 @@ final class ArenaGenerator {
                 paintRelicLane(world, arena, terrain, edits, startX, startZ, sideStartX, sideStartZ);
                 paintRelicLane(world, arena, terrain, edits, sideStartX, sideStartZ, sideEndX, sideEndZ);
                 paintRelicLane(world, arena, terrain, edits, sideEndX, sideEndZ, 0, 0);
+            }
+        }
+    }
+
+private static void clearRelicSpawnHeadroom(
+        ArenaData arena, TerrainProfile terrain, Map<BlockPos, BlockEdit> edits, int teamCount
+    ) {
+        for (String team : RelicTeamLayout.teamNames(teamCount)) {
+            int[] spawn = RelicTeamLayout.offset(team, teamCount, arena.spawnOffset);
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    int x = spawn[0] + dx;
+                    int z = spawn[1] + dz;
+                    int surfaceY = terrain.heightAt(x, z);
+                    for (int dy = 1; dy <= 3; dy++) {
+                        add(edits, x, surfaceY + dy - arena.centerY, z, Material.AIR);
+                    }
+                }
             }
         }
     }

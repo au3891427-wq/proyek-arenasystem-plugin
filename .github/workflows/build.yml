@@ -93,6 +93,10 @@ jobs:
             echo "::error::Selected ArenaGenerator is missing the 3-team Relic Rush route fix."
             exit 1
           }
+          grep -q 'clearRelicSpawnHeadroom' "$SOURCE_PATH" || {
+            echo "::error::Selected ArenaGenerator is missing the Relic Rush spawn-clearance fix."
+            exit 1
+          }
 
           PLUGIN_VERSION="$(sed -nE "s/^version:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?[[:space:]]*$/\1/p" "$PLUGIN_YML" | head -n 1)"
           API_VERSION="$(sed -nE "s/^api-version:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?[[:space:]]*$/\1/p" "$PLUGIN_YML" | head -n 1)"
@@ -139,6 +143,10 @@ jobs:
             > "$RUNNER_TEMP/ArenaGenerator.javap"
           grep -q 'clearRelicLaneHeadroom' "$RUNNER_TEMP/ArenaGenerator.javap" || {
             echo "::error::Compiled JAR does not contain clearRelicLaneHeadroom."
+            exit 1
+          }
+          grep -q 'clearRelicSpawnHeadroom' "$RUNNER_TEMP/ArenaGenerator.javap" || {
+            echo "::error::Compiled JAR does not contain clearRelicSpawnHeadroom."
             exit 1
           }
 
