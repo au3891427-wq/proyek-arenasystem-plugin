@@ -28,6 +28,13 @@
         </dependency>
     </dependencies>
     <build>
+        <sourceDirectory>${project.basedir}/arenasystem</sourceDirectory>
+        <resources>
+            <resource>
+                <directory>${project.basedir}/resources</directory>
+                <filtering>false</filtering>
+            </resource>
+        </resources>
         <finalName>arenaSystem_Bukkit-${project.version}</finalName>
         <plugins>
             <plugin>
