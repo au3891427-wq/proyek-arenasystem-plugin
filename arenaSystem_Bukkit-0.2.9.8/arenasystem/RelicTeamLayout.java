@@ -14,6 +14,21 @@ final class RelicTeamLayout {
         return TEAM_NAMES.subList(0, safeCount);
     }
 
+    static int[] sanctumGate(String team, int teamCount, int distance) {
+        if (distance <= 0) {
+            throw new IllegalArgumentException("spawn distance must be positive");
+        }
+        int[] spawn = offset(team, teamCount, distance);
+        double length = Math.hypot(spawn[0], spawn[1]);
+        if (length == 0.0) {
+            throw new IllegalArgumentException("unknown team has no spawn position");
+        }
+        return new int[]{
+            spawn[0] - (int)Math.round(spawn[0] * 6.0 / length),
+            spawn[1] - (int)Math.round(spawn[1] * 6.0 / length)
+        };
+    }
+
     static int[] offset(String team, int teamCount, int distance) {
         String safeTeam = team == null ? "" : team.toLowerCase(Locale.ROOT);
         if (teamCount == 3) {

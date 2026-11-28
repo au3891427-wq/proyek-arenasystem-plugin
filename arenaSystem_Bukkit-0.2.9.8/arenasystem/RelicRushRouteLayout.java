@@ -49,6 +49,9 @@ final class RelicRushRouteLayout {
         } else {
             addMultiTeamRoutes(result, safeTeamCount, spawnOffset);
         }
+        // A secondary ring collects each team's two approaches and feeds four fair altar gates.
+        addRing(result, Math.min(11, arenaRadius - 8), Type.ROTATION);
+        addAltarGateSpurs(result);
         addContestationRing(result, Math.min((int)Math.round(spawnOffset * 2.0 / 3.0), arenaRadius - 8));
 
         return List.copyOf(result);
@@ -83,9 +86,9 @@ final class RelicRushRouteLayout {
 
     private static void addMultiTeamRoutes(List<Segment> out, int teamCount, int spawnOffset) {
         double scale = spawnOffset / 48.0;
-        double[] radial = {41.0, 36.0, 32.0, 27.0, 22.0, 17.0, 11.0};
-        double[] left = {0.0, -2.0, -7.0, -8.0, -4.0, -7.0, -8.0};
-        double[] right = {0.0, 2.0, 7.0, 8.0, 4.0, 7.0, 8.0};
+        double[] radial = {41.0, 36.0, 32.0, 27.0, 22.0, 17.0, 11.0, 8.5};
+        double[] left = {0.0, -2.0, -7.0, -8.0, -4.0, -7.0, -8.0, -7.0};
+        double[] right = {0.0, 2.0, 7.0, 8.0, 4.0, 7.0, 8.0, 7.0};
         double[][] connector = {
             {-8.0, 27.0},
             {-10.0, 24.0},
@@ -119,7 +122,31 @@ final class RelicRushRouteLayout {
         }
     }
 
+    static List<Point> altarAccessPoints() {
+        return List.of(
+            new Point(0, -7),
+            new Point(7, 0),
+            new Point(0, 7),
+            new Point(-7, 0)
+        );
+    }
+
+    private static void addAltarGateSpurs(List<Segment> out) {
+        addPath(out, new Point(0, -11), new Point(0, -8), Type.MAIN);
+        addPath(out, new Point(11, 0), new Point(8, 0), Type.MAIN);
+        addPath(out, new Point(0, 11), new Point(0, 8), Type.MAIN);
+        addPath(out, new Point(-11, 0), new Point(-8, 0), Type.MAIN);
+    }
+
+    private static void addPath(List<Segment> out, Point start, Point end, Type type) {
+        out.add(new Segment(start, end, 3, type));
+    }
+
     private static void addContestationRing(List<Segment> out, int ringRadius) {
+        addRing(out, ringRadius, Type.CONTESTATION);
+    }
+
+    private static void addRing(List<Segment> out, int ringRadius, Type type) {
         int steps = Math.max(64, ringRadius * 4);
         Point previous = null;
         Point first = null;
@@ -134,7 +161,7 @@ final class RelicRushRouteLayout {
                 first = current;
             }
             if (previous != null && !previous.equals(current)) {
-                out.add(new Segment(previous, current, 3, Type.CONTESTATION));
+                out.add(new Segment(previous, current, 3, type));
             }
             previous = current;
         }

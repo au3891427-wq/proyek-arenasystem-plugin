@@ -61,20 +61,21 @@ final class NavigationScanner {
     static boolean hasRelicRoutes(
         ArenaData arena, TerrainProfile terrain, Map<BlockPos, BlockEdit> edits, int spawnOffset, int teamCount
     ) {
-        // Altar (0,0) sendiri tidak walkable: buildRelicShrine menumpuk monumen dekoratif
-        // 4 blok tepat di kolom (0,0) sebelum validasi ini berjalan, sama seperti titik
-        // spawn tim yang juga tidak dipakai langsung (digeser 6 blok). Maka rute divalidasi
-        // menuju sel walkable terdekat dari altar, bukan ke blok monumen itu sendiri.
-        int[] altarAccess = nearestWalkable(arena, terrain, edits, 0, 0, 8);
-        if (altarAccess == null) {
-            return false;
-        }
-
+        // Start at the exact sanctum gate used by ArenaGenerator. This matters for the
+        // triangular 3-team layout: subtracting six from both coordinates misses the gate.
+        List<RelicRushRouteLayout.Point> altarGates = RelicRushRouteLayout.altarAccessPoints();
         for (String team : RelicTeamLayout.teamNames(teamCount)) {
-            int[] spawn = RelicTeamLayout.offset(team, teamCount, spawnOffset);
-            int startX = spawn[0] - Integer.signum(spawn[0]) * 6;
-            int startZ = spawn[1] - Integer.signum(spawn[1]) * 6;
-            if (!hasTwoVertexDisjointPaths(arena, terrain, edits, startX, startZ, altarAccess[0], altarAccess[1])) {
+            int[] start = RelicTeamLayout.sanctumGate(team, teamCount, spawnOffset);
+            boolean hasSafeApproach = false;
+            for (RelicRushRouteLayout.Point gate : altarGates) {
+                if (hasTwoVertexDisjointPaths(
+                    arena, terrain, edits, start[0], start[1], gate.x(), gate.z()
+                )) {
+                    hasSafeApproach = true;
+                    break;
+                }
+            }
+            if (!hasSafeApproach) {
                 return false;
             }
         }

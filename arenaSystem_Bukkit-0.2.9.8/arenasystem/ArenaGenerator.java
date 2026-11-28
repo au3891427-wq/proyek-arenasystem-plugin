@@ -223,9 +223,7 @@ final class ArenaGenerator {
                 edits,
                 spawn[0],
                 spawn[1],
-                relicTeamMaterial(team),
-                -Integer.signum(spawn[0]),
-                -Integer.signum(spawn[1])
+                relicTeamMaterial(team)
             );
         }
 
@@ -627,9 +625,7 @@ private static void clearRelicSegmentHeadroom(
         Map<BlockPos, BlockEdit> edits,
         int centerX,
         int centerZ,
-        Material teamMaterial,
-        int inwardX,
-        int inwardZ
+        Material teamMaterial
     ) {
         for (int dx = -6; dx <= 6; dx++) {
             for (int dz = -6; dz <= 6; dz++) {
@@ -663,14 +659,16 @@ private static void clearRelicSegmentHeadroom(
             }
         }
 
-        double inwardLength = Math.hypot(inwardX, inwardZ);
-        if (inwardLength == 0.0) {
-            throw new IllegalArgumentException("arah gerbang sanctum tidak boleh nol.");
+        double spawnLength = Math.hypot(centerX, centerZ);
+        if (spawnLength == 0.0) {
+            throw new IllegalArgumentException("posisi sanctum tidak boleh berada di pusat arena.");
         }
-        int perpendicularX = -Integer.signum(inwardZ);
-        int perpendicularZ = Integer.signum(inwardX);
-        int gateX = centerX + (int)Math.round(inwardX * 6.0 / inwardLength);
-        int gateZ = centerZ + (int)Math.round(inwardZ * 6.0 / inwardLength);
+        double inwardX = -centerX / spawnLength;
+        double inwardZ = -centerZ / spawnLength;
+        double perpendicularX = -inwardZ;
+        double perpendicularZ = inwardX;
+        int gateX = centerX + (int)Math.round(inwardX * 6.0);
+        int gateZ = centerZ + (int)Math.round(inwardZ * 6.0);
 
         for (int side : new int[]{-3, 3}) {
             buildTerrainPillar(
@@ -678,8 +676,8 @@ private static void clearRelicSegmentHeadroom(
                 arena,
                 terrain,
                 edits,
-                gateX + perpendicularX * side,
-                gateZ + perpendicularZ * side,
+                gateX + (int)Math.round(perpendicularX * side),
+                gateZ + (int)Math.round(perpendicularZ * side),
                 4,
                 teamMaterial,
                 Material.SMOOTH_SANDSTONE
@@ -693,9 +691,9 @@ private static void clearRelicSegmentHeadroom(
                 world,
                 arena,
                 edits,
-                gateX + perpendicularX * width,
+                gateX + (int)Math.round(perpendicularX * width),
                 gateY + 4,
-                gateZ + perpendicularZ * width,
+                gateZ + (int)Math.round(perpendicularZ * width),
                 Material.CHISELED_SANDSTONE
             );
         }
